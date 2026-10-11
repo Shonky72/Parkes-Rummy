@@ -1,0 +1,26 @@
+.account-controls { min-width: 0; text-align: left; }
+.start-panel > .account-controls { margin: 0 0 21px; padding: 0 0 20px; border-bottom: 1px solid #8ba38a44; }
+.guest-panel > .account-controls { margin: 0 0 22px; padding-bottom: 20px; border-bottom: 1px solid #8ba38a44; }
+.account-intro, .account-signed-in { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.account-intro > svg { flex-shrink: 0; color: var(--gold); }
+.account-intro > div, .account-signed-in > div { flex: 1; min-width: 0; }
+.account-controls strong { display: block; color: var(--ivory); font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+.account-controls p { margin: 4px 0 0; color: #b5c9bd; font-size: 12px; line-height: 1.5; }
+.google-signin { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; min-height: 44px; margin-top: 13px; padding: 10px 14px; border: 1px solid #747775; border-radius: 8px; background: #fff; color: #1f1f1f; font-family: Arial, sans-serif; font-weight: 500; font-size: 14px; line-height: 20px; cursor: pointer; }
+.google-signin > svg { flex-shrink: 0; }
+.google-signin:hover:not(:disabled) { background: #f5f7fa; box-shadow: 0 1px 3px #0003; }
+.google-signin:disabled { opacity: .6; cursor: default; }
+.google-signin:focus-visible { outline: 2px solid var(--gold-light); outline-offset: 3px; }
+.account-check { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 30px; height: 30px; border: 1px solid #cfb66877; border-radius: 50%; background: #42583b88; color: #f2d489; }
+.account-signed-in { flex-wrap: wrap; }
+.account-controls .account-signout { flex-shrink: 0; min-width: 44px; min-height: 44px; width: auto; margin: 0; padding: 8px 10px; font-size: 12px; gap: 6px; }
+.account-controls .account-setup-note { color: #cbbb93; font-size: 11px; }
+.account-controls .account-error { color: #ffc299; }
+.account-controls-compact { padding: 0 0 20px; margin: 0 0 2px; border-bottom: 1px solid #8ba38a44; }
+.account-check-screen { display: grid; place-items: center; min-height: 100svh; padding: 20px; }
+.account-check-panel { position: relative; width: min(100%, 420px); padding: 34px 25px; text-align: center; }
+.account-check-suit { color: var(--gold); font-size: 58px; line-height: 1; }
+.account-check-panel h1 { margin: 14px 0; color: var(--gold-light); font-size: 33px; }
+.account-check-panel p { color: #c4d5c6; font-size: 14px; line-height: 1.55; }
+.account-check-panel > .button { width: 100%; min-height: 44px; margin-top: 20px; }
+@media (max-width: 380px) { .account-signed-in { gap: 8px; } .account-check { display: none; } .account-controls .account-signout { padding: 8px; } }
