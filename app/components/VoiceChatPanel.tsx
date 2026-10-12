@@ -29,7 +29,7 @@ export default function VoiceChatPanel({ account, roomCode }: { account: Account
     for(const track of localStream.current?.getTracks()||[])pc.addTrack(track,localStream.current!);
     pc.onicecandidate=e=>{if(e.candidate)void sendSignal(peer.id,'candidate',e.candidate.toJSON());};
     pc.onconnectionstatechange=()=>{if(['failed','closed','disconnected'].includes(pc!.connectionState)){if(pc!.connectionState!=='disconnected')closePeer(peer.id);}};
-    pc.ontrack=e=>{let audio=audios.current.get(peer.id);if(!audio){audio=document.createElement('audio');audio.autoplay=true;audio.playsInline=true;audio.dataset.voicePeer=peer.id;document.body.append(audio);audios.current.set(peer.id,audio);}audio.srcObject=e.streams[0];audio.muted=silencedRef.current;void audio.play().catch(()=>{});};
+    pc.ontrack=e=>{let audio=audios.current.get(peer.id);if(!audio){audio=document.createElement('audio');audio.autoplay=true;audio.dataset.voicePeer=peer.id;document.body.append(audio);audios.current.set(peer.id,audio);}audio.srcObject=e.streams[0];audio.muted=silencedRef.current;void audio.play().catch(()=>{});};
     if(makeOffer){const offer=await pc.createOffer();await pc.setLocalDescription(offer);await sendSignal(peer.id,'offer',offer);}
     return pc;
   }
