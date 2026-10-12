@@ -15,6 +15,12 @@ export function verifyStripeSignature(raw: string, header: string, secret: strin
   });
 }
 
+export function removeAdsPriceId() {
+  const id = process.env.STRIPE_REMOVE_ADS_PRICE_ID?.trim();
+  if (!id) throw new Error('NOT_CONFIGURED');
+  return id;
+}
+
 export function configuredPriceId(productKey: StoreProductKey) {
   const id = productPriceId(productKey);
   if (!id) throw new Error('NOT_CONFIGURED');
