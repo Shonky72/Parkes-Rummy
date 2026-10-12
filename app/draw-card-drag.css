@@ -1,0 +1,46 @@
+/* Keep pile dimensions and spacing owned by the existing desktop/mobile layout. */
+.draw-card-button {
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.draw-card-button:not(:disabled) { touch-action: none; cursor: grab; }
+.draw-card-button > * { pointer-events: none; }
+.draw-card-button.draw-card-is-dragging { cursor: grabbing; filter: brightness(.84); }
+
+.draw-card-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10000;
+  margin: 0;
+  padding: 0;
+  border-radius: 8px;
+  pointer-events: none;
+  user-select: none;
+  touch-action: none;
+  transform-origin: center;
+  box-shadow: 0 16px 26px #00140fb3, 0 0 0 2px #f6d486;
+  will-change: transform;
+}
+
+.draw-card-drag-ghost,
+.draw-card-drag-ghost * { pointer-events: none !important; }
+
+.draw-card-drag-ghost > :is(.card-face, .card-back) {
+  position: relative;
+  display: block;
+  inset: auto;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: 100%;
+  margin: 0;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draw-card-drag-ghost { will-change: auto; }
+}

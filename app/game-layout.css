@@ -1,0 +1,725 @@
+/* The decorative fan extends beyond its scaled box. Keep the next panel clear
+   after removing the obscured feature badges, without adding replacement text. */
+.home-hero {
+  padding-bottom: 76px;
+}
+
+@media (max-width: 1320px) {
+  .home-hero { padding-bottom: 71px; }
+}
+
+@media (max-width: 1050px) {
+  .home-hero { padding-bottom: 59px; }
+}
+
+@media (max-width: 850px) {
+  .home-hero { padding-bottom: 60px; }
+}
+
+@media (max-width: 600px) {
+  .home-hero { padding-bottom: 53px; }
+}
+
+/* Keep the game mark, with room details centred instead of a repeated title. */
+.home-header .brand,
+.lobby-header .brand,
+.game-header .brand {
+  flex-shrink: 0;
+  gap: 0;
+}
+
+.header-room-code {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 90px;
+  min-width: 0;
+  text-align: center;
+  color: var(--gold);
+}
+
+.header-room-code > span {
+  font-size: 9px;
+  line-height: 1.2;
+  letter-spacing: .17em;
+  color: #b9cbbf;
+}
+
+.header-room-code > strong {
+  font-family: ui-monospace, 'Courier New', monospace;
+  font-size: 25px;
+  line-height: 1.1;
+  letter-spacing: .12em;
+  text-indent: .12em;
+  font-variant-numeric: tabular-nums;
+}
+
+.header-room-code[data-code-length="6"] > strong {
+  font-size: 19px;
+  letter-spacing: .07em;
+  text-indent: .07em;
+}
+
+.lobby-header,
+.game-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+}
+
+.lobby-header > .brand,
+.game-header > .brand {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+}
+
+.lobby-header > .header-room-code,
+.game-header > .header-room-code {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.lobby-header > .header-actions,
+.game-header > .game-header-details {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+}
+
+.game-header > .table-tabs {
+  position: static;
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  left: auto;
+  transform: none;
+  margin-left: 64px;
+}
+
+.game-header-details > span {
+  display: none;
+}
+
+/* Both code entry and the invitation's code stay centred on their own panel. */
+.code-entry-form > label,
+.code-input,
+.room-code-box {
+  text-align: center;
+}
+
+.room-code-box > div {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.room-code-box strong {
+  grid-column: 2;
+  justify-self: center;
+  font-size: clamp(30px, 3.8vw, 48px);
+  letter-spacing: .12em;
+  text-indent: .12em;
+}
+
+.room-code-box .icon-button {
+  grid-column: 3;
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+}
+
+/* Separate touch targets: the gap itself performs no draw action. */
+.draw-section {
+  --pile-width: 76px;
+  --pile-height: 114px;
+  --pile-gap: 24px;
+  position: relative;
+  grid-template-columns: repeat(2, var(--pile-width));
+  justify-content: center;
+  align-items: center;
+  gap: var(--pile-gap);
+  padding: 12px 10px;
+  min-height: 166px;
+}
+
+.draw-section::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 24%;
+  bottom: 20%;
+  width: 1px;
+  background: #cbb76c35;
+  pointer-events: none;
+}
+
+.draw-section > .draw-pile-choice {
+  min-width: 0;
+  gap: 8px;
+}
+
+.draw-section label {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.draw-section .stock-pile,
+.draw-section .discard-pile {
+  width: var(--pile-width);
+  min-width: var(--pile-width);
+  height: var(--pile-height);
+  touch-action: manipulation;
+  border-radius: 9px;
+}
+
+.draw-section .stock-pile > .card-back {
+  width: calc(var(--pile-width) - 6px);
+  height: calc(var(--pile-height) - 7px);
+}
+
+.draw-section .discard-pile .card-face {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+}
+
+.draw-section .discard-pile .card-corner b {
+  font-size: calc(var(--pile-width) * .36);
+}
+
+.draw-section .discard-pile .card-centre {
+  font-size: calc(var(--pile-width) * .74);
+}
+
+.draw-section .discard-pile .wild-badge {
+  font-size: 9px;
+  height: 18px;
+  bottom: 3px;
+}
+
+.draw-section small {
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.draw-section button:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 4px;
+}
+
+/* The small utility control stays to the right of the main actions. */
+.hand-actions > :is(.sort-button, .sort-control) {
+  grid-column: 2;
+  justify-self: end;
+  width: auto;
+  min-width: 64px;
+  min-height: 44px;
+}
+
+.hand-actions > .sort-button {
+  padding: 8px 10px;
+}
+
+.clear-hand-selection {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  gap: 3px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 4px 7px;
+  border-radius: 7px;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.clear-hand-selection:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.clear-hand-selection[data-hidden='true'] {
+  visibility: hidden;
+}
+
+/* Three rule sets share the existing gold selector. Let headings wrap before
+   the new choice crowds a link, and keep all three options visible on phones. */
+.lobby-rules-heading,
+.scores-heading {
+  flex-wrap: wrap;
+}
+
+.segmented.game-tabs {
+  min-width: 0;
+  max-width: 100%;
+  flex-shrink: 1;
+}
+
+.segmented.game-tabs > button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
+  padding: 9px 18px;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .segmented.game-tabs {
+    width: 100%;
+  }
+
+  .scores-heading > .game-tabs {
+    flex-basis: 100%;
+  }
+
+  .segmented.game-tabs > button {
+    padding: 9px 10px;
+  }
+}
+
+@media (min-width: 851px) {
+  /* Keep the player details and actions together at the left edge of the hand.
+     The cards span both rows and gain the width previously used on the right. */
+  .hand-layout {
+    grid-template-columns: clamp(240px, 20vw, 280px) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    gap: 10px 16px;
+  }
+
+  .your-hand-player {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: end;
+    min-width: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+  }
+
+  .your-hand-player .avatar {
+    --avatar-size: clamp(40px, 3.1vw, 48px);
+  }
+
+  .your-hand-player > div {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: baseline;
+    min-width: 0;
+    gap: 4px 8px;
+  }
+
+  .your-hand-player strong {
+    grid-column: 1 / -1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: clamp(14px, 1.1vw, 17px);
+  }
+
+  .your-hand-player b {
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  .your-hand-player .hand-card-count {
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .your-hand-player small {
+    grid-column: 1 / -1;
+    font-size: 11px;
+  }
+
+  .hand-layout > .hand-tray {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+
+  .hand-actions {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 56px;
+    gap: 8px;
+  }
+
+  .hand-actions > .button {
+    min-width: 0;
+    height: 48px;
+    min-height: 48px;
+    padding: 6px;
+    font-size: 13px;
+    line-height: 1.15;
+    white-space: normal;
+  }
+
+  .hand-actions > :is(.sort-button, .sort-control) {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: stretch;
+    width: 100%;
+    min-width: 0;
+    height: 48px;
+    min-height: 48px;
+    font-size: 11px;
+  }
+
+  .hand-actions .inline-spinner { gap: 4px; }
+  .hand-actions .inline-spinner > svg { width: 15px; height: 15px; }
+
+  /* Selection guidance and Clear share a permanent band above the hand. Text
+     stays readable on two lines; unusually long messages scroll within the
+     band instead of moving cards while the player is choosing a card. */
+  .hand-status {
+    height: 44px;
+    min-height: 44px;
+    max-height: 44px;
+    flex-wrap: nowrap;
+  }
+
+  .hand-status > :is(.turn-label, .waiting-label, .turn-countdown) {
+    flex-shrink: 0;
+  }
+
+  .hand-status > .waiting-label {
+    max-width: 30%;
+    max-height: 44px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    overflow-y: auto;
+  }
+
+  .hand-status > p {
+    flex: 1 1 0;
+    min-width: 0;
+    max-height: 40px;
+    line-height: 1.35;
+    text-align: center;
+    overflow-wrap: anywhere;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+
+  /* The valid-place shortcut replaces a sentence when a card is selected.
+     Give both states the same heading height so the whole table stays put. */
+  .table-area-heading {
+    height: 44px;
+    min-height: 44px;
+    max-height: 44px;
+    flex-wrap: nowrap;
+  }
+
+  .table-area-heading > h2 {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .table-area-heading > :is(span, .target-shortcut) {
+    flex: 1 1 0;
+    min-width: 0;
+    max-height: 44px;
+    line-height: 1.3;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+
+  .table-area-heading > .target-shortcut {
+    justify-content: flex-start;
+  }
+
+  .table-area-heading > .target-shortcut > svg {
+    flex-shrink: 0;
+  }
+
+  /* Appending a placement target must not add a scrollbar's height or make
+     the row taller. Stretch targets to the exposed cards' current size. */
+  .player-melds {
+    overflow-x: scroll;
+  }
+
+  .meld-cards > .meld-target {
+    align-self: stretch;
+    height: auto;
+  }
+}
+
+/* Make room for the larger piles in the desktop sidebar as well. */
+@media (min-width: 851px) and (max-width: 1320px) {
+  .table-content {
+    grid-template-columns: 232px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 850px) {
+  .clear-hand-selection[data-hidden='true'] {
+    display: none;
+  }
+
+  .home-header .how-button,
+  .home-header .sound-button {
+    min-height: 44px;
+  }
+
+  .home-header .sound-button {
+    min-width: 44px;
+    width: 44px;
+  }
+
+  .header-room-code {
+    width: 76px;
+  }
+
+  .header-room-code > strong {
+    font-size: 22px;
+  }
+
+  .header-room-code[data-code-length="6"] > strong {
+    font-size: 16px;
+  }
+
+  .lobby-header {
+    gap: 6px;
+  }
+
+  .lobby-header .lobby-tag {
+    display: none;
+  }
+
+  .lobby-header > .header-actions {
+    gap: 4px;
+  }
+
+  .lobby-header .button.small {
+    min-height: 44px;
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .lobby-header .icon-button {
+    min-width: 36px;
+    min-height: 44px;
+  }
+
+  .game-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    min-height: 0;
+    padding: 5px 10px 0;
+  }
+
+  .game-header > .brand {
+    margin-right: auto;
+  }
+
+  .game-header > .header-room-code {
+    position: absolute;
+    top: 7px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .game-header > .game-header-details {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+  }
+
+  .game-header-details > .exit-game-button {
+    min-height: 44px;
+    padding: 7px 8px;
+    gap: 5px;
+    font-size: 11px;
+  }
+
+  .game-header-details > .icon-button {
+    min-width: 40px;
+    min-height: 44px;
+    padding: 8px;
+    border: 0;
+  }
+
+  .game-header-details > .game-pill {
+    position: absolute;
+    right: 10px;
+    bottom: 3px;
+    width: 76px;
+    min-width: 76px;
+    min-height: 42px;
+    margin: 0;
+    padding: 6px;
+    font-size: 11px;
+  }
+
+  .game-header > .table-tabs {
+    position: static;
+    flex: 1 1 100%;
+    order: 3;
+    min-width: 0;
+    margin: 2px 0 0;
+    padding-right: 82px;
+    justify-self: stretch;
+    gap: 4px;
+  }
+
+  .table-tabs button,
+  .table-tabs button.active {
+    min-width: 0;
+    max-width: none;
+    min-height: 44px;
+    padding: 7px 8px;
+    font-size: 12px;
+  }
+
+  .table-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 5px;
+  }
+
+  /* With the piles in the hand dock, the rule uses the full table width. */
+  .your-rule {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 10px;
+    row-gap: 4px;
+    padding: 8px 10px;
+  }
+
+  .your-rule h3 {
+    grid-column: 1;
+    grid-row: 1;
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  .your-rule h3 span {
+    overflow-wrap: anywhere;
+  }
+
+  .your-rule .big-rule-number {
+    grid-column: 2;
+    grid-row: 1;
+    margin: 0;
+    font-size: 26px;
+  }
+
+  .your-rule > p {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    max-width: none;
+    margin: 0;
+    font-size: clamp(20px, 5.3vw, 24px);
+    line-height: 1.2;
+  }
+
+  .your-rule > small {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .your-rule .requirement-tags {
+    grid-column: 1;
+    grid-row: 3;
+    flex-wrap: wrap;
+    margin: 1px 0 0;
+  }
+
+  .your-rule > .status-badge {
+    grid-column: 2;
+    grid-row: 3;
+    min-height: 24px;
+    margin: 1px 0 0;
+  }
+
+  .your-rule:has(> small) .requirement-tags,
+  .your-rule:has(> small) > .status-badge {
+    grid-row: 4;
+  }
+
+  /* Keep the QR beside the heading, then give the centred code a full row. */
+  .invite-panel > h2 {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: end;
+  }
+
+  .invite-panel > p {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+  }
+
+  .invite-panel > .qr-row {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+
+  .invite-panel > .room-code-box {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    margin: 10px 0;
+    padding-top: 10px;
+  }
+
+  .invite-panel > .button {
+    grid-row: 4;
+  }
+
+  .invite-panel > .invite-instructions {
+    grid-row: 5;
+  }
+
+  .invite-panel > .direct-link-details {
+    grid-row: 6;
+  }
+}
+
+@media (max-width: 390px) {
+  .lobby-leave-context {
+    display: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .header-room-code {
+    width: 64px;
+  }
+
+  .header-room-code > strong {
+    font-size: 20px;
+    letter-spacing: .09em;
+    text-indent: .09em;
+  }
+
+  .header-room-code[data-code-length="6"] > strong {
+    font-size: 14px;
+  }
+
+  .game-header-details > .exit-game-button {
+    padding: 6px 4px;
+    font-size: 10px;
+    gap: 4px;
+  }
+
+  .game-header-details > .icon-button {
+    min-width: 36px;
+    padding: 6px;
+  }
+}

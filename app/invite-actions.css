@@ -1,0 +1,67 @@
+.invite-panel .invite-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.invite-panel .invite-actions > .button {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  margin: 0;
+  padding: 10px 8px;
+  gap: 7px;
+  font-size: 13px;
+  line-height: 1.2;
+  text-decoration: none;
+}
+
+.invite-panel .invite-actions > .invite-share-button {
+  grid-column: 1 / -1;
+  min-height: 50px;
+  font-size: 16px;
+}
+
+.invite-actions .invite-facebook-mark {
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  color: #f7e2a8;
+  font: 700 22px/.9 Arial, sans-serif;
+  text-indent: 2px;
+}
+
+.invite-actions .invite-external-icon {
+  flex: 0 0 auto;
+  opacity: .65;
+}
+
+.invite-actions .button:focus-visible {
+  outline: 2px solid #ffdf88;
+  outline-offset: 3px;
+}
+
+@media (max-width: 850px) {
+  .invite-panel > .invite-actions {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    margin-top: 0;
+  }
+}
+
+@media (max-width: 350px) {
+  .invite-panel .invite-actions > .button {
+    font-size: 12px;
+    gap: 5px;
+  }
+  .invite-panel .invite-actions > .invite-share-button {
+    font-size: 15px;
+  }
+}

@@ -1,0 +1,104 @@
+/* Mount once after .felt-grain. The isolated .parkes-app keeps this layer above
+   the felt and below every card, rule, label and control. */
+.background-suits.background-suits-drift {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  z-index: -1;
+  pointer-events: none;
+  user-select: none;
+  contain: strict;
+}
+
+.background-suits.background-suits-drift > span {
+  --drift-x: 14vw;
+  --drift-y: 16vh;
+  --drift-start-angle: -11deg;
+  --drift-end-angle: 9deg;
+  position: absolute;
+  inset: auto;
+  display: block;
+  width: max-content;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(100px, 10vw, 150px);
+  line-height: 1;
+  color: transparent;
+  -webkit-text-stroke: 1px #bfa95340;
+  pointer-events: none;
+  will-change: transform;
+  animation: background-suit-drift 35s ease-in-out infinite alternate;
+}
+
+/* Different starting phases keep the four outlines from moving as one group.
+   Each leg covers a broad diagonal; alternate easing joins without a jump. */
+.background-suits.background-suits-drift > span:nth-child(1) {
+  left: 9%;
+  top: 21%;
+  right: auto;
+  bottom: auto;
+  animation-duration: 31s;
+  animation-delay: -11s;
+}
+
+.background-suits.background-suits-drift > span:nth-child(2) {
+  --drift-x: 17vw;
+  --drift-y: 19vh;
+  --drift-start-angle: -6deg;
+  --drift-end-angle: 12deg;
+  left: 69%;
+  top: 28%;
+  right: auto;
+  bottom: auto;
+  animation-duration: 37s;
+  animation-delay: -27s;
+}
+
+.background-suits.background-suits-drift > span:nth-child(3) {
+  --drift-x: 18vw;
+  --drift-y: 14vh;
+  --drift-start-angle: 8deg;
+  --drift-end-angle: -10deg;
+  left: 16%;
+  top: 71%;
+  right: auto;
+  bottom: auto;
+  animation-duration: 43s;
+  animation-delay: -9s;
+  animation-direction: alternate-reverse;
+}
+
+.background-suits.background-suits-drift > span:nth-child(4) {
+  --drift-x: 16vw;
+  --drift-y: 17vh;
+  left: 73%;
+  top: 75%;
+  right: auto;
+  bottom: auto;
+  animation-duration: 29s;
+  animation-delay: -18s;
+  animation-direction: alternate-reverse;
+}
+
+/* Quieter behind the shared table, with the home screen's original gold stroke. */
+.parkes-app.in-game .background-suits-drift {
+  opacity: .55;
+}
+
+@keyframes background-suit-drift {
+  from {
+    transform: translate3d(calc(0vw - var(--drift-x)), var(--drift-y), 0)
+      rotate(var(--drift-start-angle));
+  }
+  to {
+    transform: translate3d(var(--drift-x), calc(0vh - var(--drift-y)), 0)
+      rotate(var(--drift-end-angle));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .background-suits.background-suits-drift > span {
+    animation: none !important;
+    transform: none;
+    will-change: auto;
+  }
+}

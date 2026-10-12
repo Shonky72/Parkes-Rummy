@@ -1,0 +1,84 @@
+.move-hints-setting {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-top: 1px solid #91b49438;
+  padding-top: 12px;
+  margin-top: 13px;
+}
+.move-hints-copy { flex: 1 1 210px; min-width: 0; }
+.move-hints-copy label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #c6d7c9;
+  font-size: 13px;
+}
+.move-hints-copy label svg { color: var(--gold); }
+.move-hints-copy small,
+.move-hints-host-note {
+  display: block;
+  color: #9ab6a5;
+  font-size: 11px;
+  line-height: 1.5;
+  margin-top: 5px;
+}
+.move-hints-control { display: flex; align-items: center; gap: 9px; margin-left: auto; }
+.move-hints-control > span { min-width: 22px; font-size: 12px; color: #d8e4d9; }
+.move-hints-control .toggle {
+  position: relative;
+  width: 61px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.move-hints-control .toggle::before {
+  content: '';
+  position: absolute;
+  width: 49px;
+  height: 28px;
+  left: 6px;
+  top: 8px;
+  border: 1px solid #8295866b;
+  border-radius: 20px;
+  background: #19392c;
+  transition: background .2s;
+}
+.move-hints-control .toggle.on::before { background: #a4933f; border-color: #e6c86a; }
+.move-hints-control .toggle > span { position: absolute; top: 12px; left: 10px; }
+.move-hints-control .toggle:disabled { opacity: .8; }
+.move-hints-host-note { flex-basis: 100%; margin: 0; }
+.rules-modal-note.move-hints-rule-note { margin-top: 9px; }
+
+/* Manual placement controls never indicate whether the selected card fits. */
+.meld-target.meld-target-manual {
+  border: 1px solid #77938480;
+  border-radius: 7px;
+  background: #173f302b;
+  color: #b7cbbb;
+  box-shadow: none;
+}
+.meld-target-manual > span { color: #b7cbbb; }
+.meld-target.meld-target-manual:hover,
+.meld-target.meld-target-manual:focus-visible {
+  border-color: #b2c8b5;
+  background: #31554155;
+  box-shadow: none;
+}
+.meld-target.meld-target-manual:focus-visible { outline: 2px solid #c0d1c4; }
+.meld-target.meld-target-manual[data-card-drag-over='true'] {
+  outline: 2px solid #c0d1c4 !important;
+  outline-offset: 3px;
+  box-shadow: none !important;
+  background: #31554155;
+}
+@media (max-width: 600px) {
+  .move-hints-setting { gap: 5px 9px; padding-top: 10px; margin-top: 11px; }
+  .move-hints-copy { flex-basis: 160px; }
+  .move-hints-copy label { font-size: 12px; gap: 7px; }
+  .move-hints-copy small,
+  .move-hints-host-note { font-size: 10px; }
+}

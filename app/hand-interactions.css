@@ -1,0 +1,170 @@
+/* The visual card and its hit area always share the same width. */
+.hand-tray {
+  --hand-card-width: 77px;
+  --hand-card-height: 118px;
+  --hand-card-lift: -9px;
+  min-width: 0;
+  position: relative;
+  align-self: center;
+}
+
+.hand-tray .hand-cards {
+  position: relative;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: calc(var(--hand-card-height) + 17px);
+  margin-left: 0;
+  padding: 11px 4px 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #83a1805e transparent;
+  scroll-behavior: auto;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+}
+
+.hand-tray .hand-card,
+.hand-tray .hand-card:last-child {
+  width: var(--hand-card-width);
+  min-width: var(--hand-card-width);
+  max-width: var(--hand-card-width);
+  height: var(--hand-card-height);
+  flex: 0 0 var(--hand-card-width);
+  padding: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: grab;
+  transition: transform .14s ease, box-shadow .14s ease, opacity .12s ease;
+}
+
+.hand-tray .hand-card:first-of-type { margin-inline-start: auto; }
+.hand-tray .hand-card:last-of-type { margin-inline-end: auto; }
+.hand-tray .hand-card * { pointer-events: none; }
+.hand-tray .hand-card .card-face {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: 100%;
+}
+.hand-tray .hand-card:hover { transform: none; z-index: auto; }
+.hand-tray .hand-card.selected,
+.hand-tray .hand-card.selected:hover { transform: translateY(var(--hand-card-lift)); z-index: 1; }
+.hand-tray .hand-card:focus-visible { outline: 2px solid #fff0b0; outline-offset: 3px; z-index: 2; }
+.hand-tray .hand-card.is-dragging,
+.hand-tray .hand-card.is-dragging:hover { opacity: .26; transform: none; box-shadow: none; cursor: grabbing; }
+.hand-is-dragging .hand-cards { cursor: grabbing; }
+.hand-selection-tick { display: none; }
+
+.hand-gesture-hint {
+  min-height: 12px;
+  padding: 0 4px;
+  text-align: center;
+  color: #b8cdbcbf;
+  font-size: 9px;
+  line-height: 1.3;
+  letter-spacing: .15px;
+  pointer-events: none;
+}
+.hand-touch-hint { display: none; }
+.hand-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.hand-drag-ghost.hand-card {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10000;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+  touch-action: none;
+  transform-origin: center;
+  transition: none;
+  box-shadow: 0 16px 26px #00140fb3, 0 0 0 2px #f6d486;
+  border-radius: 8px;
+  will-change: transform;
+}
+.hand-drag-ghost .card-face { width: 100%; min-width: 0; max-width: none; height: 100%; }
+.hand-drag-ghost * { pointer-events: none; }
+
+.hand-drop-line {
+  position: fixed;
+  z-index: 9999;
+  width: 3px;
+  pointer-events: none;
+  border-radius: 3px;
+  background: #ffdf8c;
+  box-shadow: 0 0 10px #edc162aa;
+}
+.hand-drop-line::before,
+.hand-drop-line::after {
+  content: '';
+  position: absolute;
+  left: -2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffdf8c;
+}
+.hand-drop-line::before { top: -2px; }
+.hand-drop-line::after { bottom: -2px; }
+[data-card-drag-over='true'] {
+  outline: 3px solid #ffe59e !important;
+  outline-offset: 3px;
+  box-shadow: 0 0 22px #f6cc7380 !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hand-tray .hand-card:hover { transform: translateY(-5px); z-index: 1; }
+  .hand-tray .hand-card.selected:hover { transform: translateY(var(--hand-card-lift)); }
+  .hand-tray .hand-card.is-dragging:hover { transform: none; }
+}
+@media (pointer: coarse) {
+  .hand-touch-hint { display: inline; }
+  .hand-mouse-hint { display: none; }
+}
+@media (min-width: 1600px) {
+  .hand-tray { --hand-card-width: 84px; --hand-card-height: 128px; }
+}
+@media (max-width: 1320px) {
+  .hand-tray { --hand-card-width: 64px; --hand-card-height: 107px; }
+}
+@media (max-width: 1100px) {
+  .hand-tray { --hand-card-width: 57px; --hand-card-height: 96px; }
+}
+@media (max-width: 850px) {
+  .hand-tray { --hand-card-width: 61px; --hand-card-height: 94px; }
+  .table-main { padding-bottom: calc(260px + env(safe-area-inset-bottom)); }
+  .in-game:has(.table-main) .toast { bottom: calc(250px + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 600px) {
+  .hand-tray { --hand-card-width: 57px; --hand-card-height: 91px; --hand-card-lift: -7px; margin-left: 84px; }
+  .hand-tray .hand-cards { gap: 6px; padding: 10px 4px 6px; min-height: 107px; }
+  .hand-gesture-hint { font-size: 8px; min-height: 11px; letter-spacing: 0; }
+  .hand-touch-hint { display: inline; }
+  .hand-mouse-hint { display: none; }
+}
+@media (max-width: 390px) {
+  .hand-tray { --hand-card-width: 53px; margin-left: 78px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hand-tray .hand-card { transition: none; }
+  .hand-drag-ghost.hand-card { will-change: auto; }
+}

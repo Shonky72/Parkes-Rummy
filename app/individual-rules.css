@@ -1,0 +1,72 @@
+/* Keep rule progression beside the existing scores, with room for long names. */
+.game-update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #173d2f;
+  color: #fff0bf;
+  border-bottom: 1px solid #e8c57699;
+}
+
+.game-update-banner > svg {
+  flex-shrink: 0;
+}
+
+.game-update-banner > span {
+  max-width: 620px;
+}
+
+.game-update-banner .button {
+  min-height: 44px;
+  padding: 8px 14px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.result-row > div:first-child {
+  min-width: 0;
+}
+
+.result-row strong {
+  overflow-wrap: anywhere;
+}
+
+.result-rule-outcome {
+  grid-column: 1 / -1;
+  margin: -3px 0 0;
+  color: #d4d4ba;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.history-scores .history-rule-outcome {
+  grid-column: 1 / -1;
+  margin-top: -5px;
+  color: #c0c9b8;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.result-rule-outcome.rule-advanced,
+.history-scores .history-rule-outcome.rule-advanced {
+  color: #7dd9c8;
+}
+
+.rule-progress-note {
+  align-items: flex-start;
+  line-height: 1.5;
+}
+
+.rule-progress-note > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+@media (max-width: 600px) {
+  .result-rule-outcome {
+    font-size: 11px;
+  }
+}

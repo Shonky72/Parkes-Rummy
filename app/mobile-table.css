@@ -1,0 +1,434 @@
+/* Keep the rule readable at every table size, without a fixed-height text box. */
+.your-rule {
+  min-width: 0;
+  height: auto;
+}
+
+.your-rule h3 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.your-rule > p {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  margin: 7px 0 11px;
+  padding: 0;
+  font-size: clamp(20px, 1.65vw, 28px);
+  font-weight: 700;
+  line-height: 1.22;
+  text-wrap: balance;
+  overflow-wrap: break-word;
+  color: var(--ivory);
+}
+
+.your-rule > small {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #cee0d2;
+}
+
+.game-header-details > .exit-game-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  gap: 7px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.game-header-details > .exit-game-button > svg {
+  flex-shrink: 0;
+}
+
+@media (max-width: 850px) {
+  /* The measured dock height includes wrapping content and the safe area. */
+  .table-main {
+    padding-bottom: calc(var(--hand-dock-height, calc(200px + env(safe-area-inset-bottom))) + 16px);
+    scroll-margin-bottom: calc(var(--hand-dock-height, calc(200px + env(safe-area-inset-bottom))) + 16px);
+  }
+
+  .in-game:has(.table-main) .toast {
+    bottom: calc(var(--hand-dock-height, calc(200px + env(safe-area-inset-bottom))) + 10px);
+  }
+
+  .game-header-details > .icon-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .your-rule {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-content: center;
+    column-gap: 7px;
+    padding: 9px 10px;
+  }
+
+  .your-rule h3 {
+    grid-column: 1;
+    grid-row: 1;
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  .big-rule-number {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    font-size: 28px;
+    margin: 0;
+  }
+
+  .your-rule > p {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    font-size: 23px;
+    margin: 7px 0 0;
+  }
+
+  .your-rule > small {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    font-size: 12px;
+    margin: 7px 0 0;
+  }
+
+  .your-rule .requirement-tags {
+    grid-column: 1;
+    grid-row: 3;
+    min-width: 0;
+    align-self: center;
+    justify-content: flex-start;
+    gap: 4px;
+    margin: 8px 0 0;
+  }
+
+  .your-rule .requirement-tags > span {
+    min-width: 0;
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+
+  .your-rule > .status-badge {
+    grid-column: 2;
+    grid-row: 3;
+    align-self: center;
+    justify-self: end;
+    min-width: 66px;
+    padding: 4px 6px;
+    margin-top: 8px;
+    font-size: 9px;
+  }
+
+  .your-rule:has(> small) .requirement-tags,
+  .your-rule:has(> small) > .status-badge {
+    grid-row: 4;
+  }
+
+  /* Leave the main table more space while preserving full-width card targets. */
+  .your-hand {
+    min-height: 0;
+    padding: 4px 12px calc(6px + env(safe-area-inset-bottom));
+  }
+
+  .hand-status {
+    min-height: 24px;
+    margin-bottom: 0;
+    gap: 7px;
+  }
+
+  .hand-status p {
+    font-size: 10px;
+    line-height: 1.3;
+  }
+
+  .hand-status .waiting-label {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .hand-layout {
+    row-gap: 0;
+    column-gap: 12px;
+  }
+
+  .hand-tray {
+    --hand-card-lift: -7px;
+  }
+
+  .hand-tray .hand-cards {
+    min-height: calc(var(--hand-card-height) + 11px);
+    padding: 10px 4px 1px;
+  }
+
+  .hand-gesture-hint {
+    min-height: 10px;
+    padding: 0 2px;
+    font-size: 8px;
+    line-height: 10px;
+    letter-spacing: 0;
+  }
+
+  .hand-actions {
+    margin-top: 4px;
+    column-gap: 7px;
+  }
+
+  .hand-actions > .button,
+  .hand-actions > .sort-button {
+    min-height: 44px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+}
+
+@media (max-width: 600px) {
+  /* Two header rows keep every control visible on narrow phone screens. */
+  .game-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 44px;
+    gap: 0 6px;
+    min-height: 0;
+    padding: 4px 10px 0;
+  }
+
+  .game-header > .brand {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    gap: 6px;
+  }
+
+  .game-header .brand > span {
+    font-size: clamp(20px, 5.7vw, 25px);
+    letter-spacing: 0;
+  }
+
+  .game-header .brand-mark {
+    width: 30px;
+    height: 39px;
+    flex-shrink: 0;
+  }
+
+  .game-header-details {
+    display: contents;
+  }
+
+  .game-header-details > .exit-game-button {
+    grid-column: 2;
+    grid-row: 1;
+    gap: 5px;
+    padding: 8px;
+    font-size: 11px;
+  }
+
+  .game-header-details > .exit-game-button > svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .game-header-details > .icon-button {
+    grid-column: 3;
+    grid-row: 1;
+    padding: 8px;
+    border: 0;
+  }
+
+  .game-header-details > .game-pill {
+    grid-column: 2 / -1;
+    grid-row: 2;
+    align-self: center;
+    justify-self: end;
+    z-index: 1;
+    width: 70px;
+    min-width: 0;
+    min-height: 40px;
+    margin-top: 2px;
+    padding: 6px;
+    gap: 3px;
+    font-size: 11px;
+  }
+
+  .table-tabs {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+    margin: 2px 0 0;
+    padding-right: 76px;
+    gap: 4px;
+  }
+
+  .table-tabs button,
+  .table-tabs button.active {
+    min-width: 0;
+    max-width: none;
+    min-height: 44px;
+    padding: 7px 8px;
+    font-size: 12px;
+  }
+
+  .table-sidebar {
+    grid-template-columns: minmax(0, 1fr) 124px;
+  }
+
+  .your-rule {
+    padding: 8px;
+    column-gap: 6px;
+  }
+
+  .your-rule h3 {
+    font-size: 10px;
+  }
+
+  .big-rule-number {
+    font-size: 26px;
+  }
+
+  .your-rule > p {
+    font-size: clamp(17px, 4.65vw, 23px);
+    line-height: 1.22;
+  }
+
+  .your-rule .requirement-tags > span {
+    font-size: 9px;
+  }
+
+  .draw-section > div {
+    justify-content: center;
+  }
+
+  .draw-section .stock-pile,
+  .draw-section .discard-pile {
+    min-width: 44px;
+  }
+
+  .your-hand {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .hand-status p {
+    font-size: 9px;
+  }
+
+  .hand-tray {
+    margin-left: 78px;
+  }
+
+  .your-hand-player {
+    top: 37px;
+    left: 9px;
+    max-width: 73px;
+    gap: 4px;
+  }
+
+  .your-hand-player .avatar {
+    --avatar-size: 22px;
+  }
+
+  .your-hand-player > div {
+    min-width: 0;
+  }
+
+  .your-hand-player strong {
+    max-width: 47px;
+  }
+
+  .your-hand-player small {
+    top: 32px;
+    width: 72px;
+    max-width: 72px;
+  }
+
+  .hand-bottom-status {
+    top: 94px;
+    left: 8px;
+    max-width: 73px;
+  }
+
+  .hand-bottom-status .text-link {
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .hand-actions {
+    gap: 0 6px;
+  }
+}
+
+/* A rotated phone needs a shallow dock rather than two stacked action rows. */
+@media (max-width: 850px) and (max-height: 500px) and (orientation: landscape) {
+  .your-hand {
+    padding: 3px 10px calc(5px + env(safe-area-inset-bottom));
+  }
+
+  .hand-status {
+    min-height: 20px;
+  }
+
+  .hand-layout {
+    grid-template-columns: 76px minmax(0, 1fr) 182px;
+    gap: 8px;
+  }
+
+  .hand-tray {
+    --hand-card-width: 53px;
+    --hand-card-height: 80px;
+    --hand-card-lift: -7px;
+    margin-left: 0;
+  }
+
+  .your-hand-player {
+    position: static;
+    max-width: 76px;
+    flex-direction: column;
+    gap: 3px;
+    text-align: center;
+  }
+
+  .your-hand-player .avatar {
+    --avatar-size: 24px;
+  }
+
+  .your-hand-player strong {
+    max-width: 76px;
+    font-size: 10px;
+  }
+
+  .your-hand-player small {
+    position: static;
+    width: auto;
+    max-width: 76px;
+    text-align: center;
+  }
+
+  .hand-actions {
+    grid-column: 3;
+    grid-row: 1;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 5px;
+    margin: 0;
+  }
+
+  .hand-actions > .button,
+  .hand-actions > .sort-button {
+    min-height: 44px;
+    padding: 6px 4px;
+    font-size: 10px;
+  }
+
+  .hand-bottom-status {
+    position: static;
+    grid-column: 2;
+    max-width: none;
+    min-width: 0;
+  }
+}

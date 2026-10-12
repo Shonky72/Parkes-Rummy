@@ -1,0 +1,39 @@
+/* Gold belongs to the visible screen, never to a scrolling table or hand row. */
+.turn-alert-frame {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100dvh;
+  z-index: 30;
+  box-sizing: border-box;
+  pointer-events: none;
+  user-select: none;
+  border: 4px solid #f5cb68;
+  border-radius: 13px;
+  background: none;
+  box-shadow: inset 0 0 0 1px #fff0b79c, inset 0 0 21px 5px #eabc526e, 0 0 14px #f1c763;
+  opacity: .9;
+  animation: own-turn-gold-pulse 2.4s ease-in-out infinite;
+}
+
+.turn-alert-frame::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1px solid #ffdc866b;
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+@keyframes own-turn-gold-pulse {
+  0%, 100% { opacity: .42; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn-alert-frame {
+    animation: none;
+    opacity: .85;
+  }
+}
