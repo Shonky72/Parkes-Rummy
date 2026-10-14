@@ -9,8 +9,15 @@ import {
 test('rigged practice hand enforces the real draw/discard/opening sequence and ends in a guaranteed win', () => {
   let state = initialTutorialState();
   assert.equal(state.hand.length, 10);
-  assert.equal(state.phase, 'intro');
-  state = reduceTutorial(state, { type: 'start' });
+  assert.equal(state.phase, 'sort');
+  assert.equal(reduceTutorial(state, { type: 'draw', source: 'stock' }).phase, 'sort');
+  state = reduceTutorial(state, { type: 'sort' });
+  assert.equal(state.phase, 'sort-mode');
+  assert.equal(reduceTutorial(state, { type: 'sort-mode', mode: 'number' }).phase, 'sort-mode');
+  state = reduceTutorial(state, { type: 'sort-mode', mode: 'colour' });
+  assert.equal(state.phase, 'settings');
+  assert.equal(reduceTutorial(state, { type: 'draw', source: 'stock' }).phase, 'settings');
+  state = reduceTutorial(state, { type: 'settings-done' });
   assert.equal(reduceTutorial(state, { type: 'go-down' }).phase, 'first-draw');
   assert.equal(reduceTutorial(state, { type: 'draw', source: 'discard' }).phase, 'first-draw');
   state = reduceTutorial(state, { type: 'draw', source: 'stock' });
@@ -59,11 +66,13 @@ test('rigged practice hand enforces the real draw/discard/opening sequence and e
 
 test('incorrect cards and actions never advance a lesson or lose the practice hand', () => {
   let state = initialTutorialState();
-  state = reduceTutorial(state, { type: 'start' });
+  state = reduceTutorial(state, { type: 'sort' });
+  state = reduceTutorial(state, { type: 'sort-mode', mode: 'suit' });
+  state = reduceTutorial(state, { type: 'settings-done' });
   state = reduceTutorial(state, { type: 'draw', source: 'stock' });
   state = reduceTutorial(state, { type: 'select', id: '13D' });
   assert.equal(tutorialDiscardReady(state), false);
   assert.equal(reduceTutorial(state, { type: 'discard' }).phase, 'first-discard');
   assert.equal(reduceTutorial(state, { type: 'layoff', target: 'your-run' }).phase, 'first-discard');
-  assert.equal(reduceTutorial(state, { type: 'restart' }).phase, 'intro');
+  assert.equal(reduceTutorial(state, { type: 'restart' }).phase, 'sort');
 });
