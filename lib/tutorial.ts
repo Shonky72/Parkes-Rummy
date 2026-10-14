@@ -13,9 +13,9 @@ export const TUTORIAL_LAYOFF_IDS = ['10C', '11H', '12S', '13D', '10D'] as const;
 
 export const TUTORIAL_INITIAL_HAND: readonly Card[] = [
   card('5H', 5, 'H'), card('6C', 6, 'C'), card('7D', 7, 'D'),
-  card('2D', 2, 'D'), card('9S', 9, 'S'), card('10C', 10, 'C'),
+  card('2D', 2, 'D'), card('10C', 10, 'C'),
   card('11H', 11, 'H'), card('12S', 12, 'S'), card('13D', 13, 'D'),
-  card('10D', 10, 'D'),
+  card('10D', 10, 'D'), card('12D', 12, 'D'),
 ];
 
 export const TUTORIAL_AI_RUN: readonly Card[] = [
@@ -28,9 +28,10 @@ export const TUTORIAL_AI_REMAINING: readonly Card[] = [
 ];
 export const TUTORIAL_AI_PENALTY = handPoints([...TUTORIAL_AI_REMAINING]);
 
-const firstDraw = card('8D', 8, 'D');
-const opponentFirstDiscard = card('6D', 6, 'D');
-const opponentSecondDiscard = card('12D', 12, 'D');
+const firstDraw = card('14S', 14, 'S');
+const firstDiscardId = '12D';
+const opponentFirstDiscard = card('9S', 9, 'S');
+const opponentSecondDiscard = card('11D', 11, 'D');
 const thirdDraw = card('14H', 14, 'H');
 const startingDiscard = card('13C', 13, 'C');
 
@@ -75,8 +76,8 @@ export function tutorialOpeningReady(state: TutorialState): boolean {
 }
 
 export function tutorialDiscardReady(state: TutorialState): boolean {
-  const expected = state.phase === 'first-discard' ? firstDraw.id
-    : state.phase === 'second-discard' ? opponentFirstDiscard.id
+  const expected = state.phase === 'first-discard' ? firstDiscardId
+    : state.phase === 'second-discard' ? firstDraw.id
     : state.phase === 'final-discard' ? thirdDraw.id : null;
   return expected !== null && selectedEquals(state.selected, [expected]);
 }
@@ -88,8 +89,8 @@ export function tutorialLayoffTarget(state: TutorialState): TutorialTarget | nul
 
 export function tutorialExpectedCardIds(state: TutorialState): readonly string[] {
   if (state.phase === 'opening') return TUTORIAL_OPENING_IDS;
-  if (state.phase === 'first-discard') return [firstDraw.id];
-  if (state.phase === 'second-discard') return [opponentFirstDiscard.id];
+  if (state.phase === 'first-discard') return [firstDiscardId];
+  if (state.phase === 'second-discard') return [firstDraw.id];
   if (state.phase === 'layoff') return [TUTORIAL_LAYOFF_IDS[state.laidOffCount]];
   if (state.phase === 'final-discard') return [thirdDraw.id];
   return [];
@@ -107,7 +108,7 @@ export function reduceTutorial(state: TutorialState, action: TutorialAction): Tu
       return { ...state, phase: 'first-discard', hand: [...state.hand, firstDraw], selected: [] };
     }
     if (state.phase === 'second-draw' && action.source === 'discard') {
-      return { ...state, phase: 'opening', hand: [...state.hand, opponentFirstDiscard], topDiscard: firstDraw, selected: [] };
+      return { ...state, phase: 'opening', hand: [...state.hand, opponentFirstDiscard], topDiscard: state.hand.find(item => item.id === firstDiscardId) || startingDiscard, selected: [] };
     }
     if (state.phase === 'third-draw' && action.source === 'stock') {
       return { ...state, phase: 'layoff', hand: [...state.hand, thirdDraw], selected: [] };
