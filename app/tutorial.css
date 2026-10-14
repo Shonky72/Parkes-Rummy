@@ -1,4 +1,5 @@
 .tutorial-app{min-height:100dvh;overflow-x:hidden}
+.tutorial-app .card-face{display:block}
 .tutorial-header{max-width:1460px;margin:0 auto;padding:14px 28px 8px;gap:18px}
 .tutorial-header .brand{text-decoration:none}
 .tutorial-mode{display:inline-flex;align-items:center;gap:8px;color:#f1cf80;font-size:13px;letter-spacing:.035em;font-weight:800}
