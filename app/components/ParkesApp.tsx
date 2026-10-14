@@ -271,6 +271,8 @@ function ParkesGame({ initialCode, account }: { initialCode?: string; account: A
 
   useEffect(() => {
     const url = new URL(window.location.href);
+    const requestedTab = url.searchParams.get('tab');
+    if (requestedTab === 'store' || requestedTab === 'games') setHomeTab(requestedTab);
     const purchase = url.searchParams.get('store_purchase') || url.searchParams.get('remove_ads');
     if (!purchase) return;
     url.searchParams.delete('store_purchase');
