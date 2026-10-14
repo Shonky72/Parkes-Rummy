@@ -4,6 +4,7 @@ import { useEffect, useReducer, useState } from 'react';
 import { ArrowLeft, ArrowRight, Bot, Check, CircleHelp, RotateCcw, Sparkles, Trophy, X } from 'lucide-react';
 import type { Card } from '../../lib/types';
 import { RULES } from '../../lib/rummy';
+import { initAudio, playSound } from '../../lib/audio';
 import {
   initialTutorialState, reduceTutorial, tutorialDiscardReady, tutorialExpectedCardIds,
   tutorialLayoffTarget, tutorialOpeningReady, TUTORIAL_AI_PENALTY,
@@ -47,6 +48,7 @@ const milestoneCopy: Partial<Record<TutorialPhase, { heading: string; text: stri
 export default function TutorialGame() {
   const [state, dispatch] = useReducer(reduceTutorial, undefined, initialTutorialState);
   const [lesson, setLesson] = useState<TutorialPhase | null>('intro');
+  useEffect(() => { if (state.phase === 'won') playSound('roundWin'); }, [state.phase]);
   useEffect(() => {
     if (state.phase === 'second-draw' || state.phase === 'second-discard' || state.phase === 'layoff' || state.phase === 'won') {
       setLesson(state.phase);
@@ -75,7 +77,18 @@ export default function TutorialGame() {
     setLesson('intro');
   }
 
-  return <div className="parkes-app tutorial-app">
+  return <div className="parkes-app tutorial-app" onPointerDown={() => initAudio()} onClickCapture={event => {
+    const element = event.target as HTMLElement;
+    const button = element.closest('button');
+    if (!button || button.disabled) return;
+    initAudio();
+    const type = button.classList.contains('tutorial-hand-card') ? 'select'
+      : button.classList.contains('tutorial-pile') ? 'card'
+      : button.classList.contains('tutorial-meld') ? 'layoff'
+      : button.textContent?.includes('Go Down') ? 'meld'
+      : button.textContent?.includes('Discard') ? 'discard' : 'click';
+    playSound(type);
+  }}>
     <div className="felt-grain" aria-hidden="true"/>
     <BackgroundSuits/>
     <header className="site-header tutorial-header">
