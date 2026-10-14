@@ -4,6 +4,7 @@ import { getEntitlements, getPlayerProfile, isFullAccessAdmin } from '../db/enti
 import { resolveAccountUser } from './auth';
 import { readAuthConfig, accountMarker, ACCOUNT_IDENTITY_HEADER, type AccountUser } from './auth-config';
 import { applyAction, createPlayer, createRoom, lastMoveAtFor, publicRoom, roomPreview, ruleNumberFor } from './rummy';
+import { chooseQuickPlaySetup } from './quick-play';
 import { isRoomCode, normalizeRoomCode, ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from './room-code';
 import { ROOM_PROTOCOL, ROOM_PROTOCOL_HEADER, ROOM_UPDATE_MESSAGE } from './room-protocol';
 import type { Difficulty, GameAction, PlayerState, RoomState, RoomSummary, RoomSummaryResult } from './types';
@@ -208,10 +209,17 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
       const playerId = crypto.randomUUID();
       const tokenHash = identity.user ? `account:${crypto.randomUUID()}` : await hashToken(token);
       const profile = identity.user ? await getPlayerProfile(identity.user.id) : { font:'default', symbol:'initials' } as const;
+      // The server picks all Quick Play options. A browser never chooses or claims paid Original Rules.
+      const quickPlay = body.quickPlay === true ? chooseQuickPlaySetup(identity.user ? (await getEntitlements(identity.user.id)).originalRules : false) : null;
       const host = createPlayer({ id: playerId, name, tokenHash, color: 0, fontId: profile.font, symbolId: profile.symbol });
       const membership = identity.user ? { userId: identity.user.id, playerId } : undefined;
       for (let attempt = 0; attempt < 8; attempt++) {
-        const room = createRoom(roomCode(), host);
+        let room = createRoom(roomCode(), host);
+        if (quickPlay) {
+          room = applyAction(room, host.id, { type: 'setGame', game: quickPlay.game });
+          for (const difficulty of quickPlay.difficulties) room = applyAction(room, host.id, { type: 'addBot', difficulty });
+          room = applyAction(room, host.id, { type: 'start' });
+        }
         if (await repository.insert(room, membership)) return reply({ room: publicRoom(room, host.id), token }, 201);
       }
       throw new ApiError('A room code is taking a moment. Please try again.', 503);
