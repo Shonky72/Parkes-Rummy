@@ -27,7 +27,6 @@
 .store-details>summary small{color:#a8c1b5;font-size:10px;font-weight:400;margin-left:auto}
 .store-details>.style-shop{border-radius:0 0 12px 12px;box-shadow:none}
 .store-admin-details>.full-access-admin{border:0;border-top:1px solid rgba(170,199,180,.23);border-radius:0 0 12px 12px;margin:0;box-shadow:none}
-.home-tutorial-link{width:100%;margin-top:12px;min-height:43px;font-size:13px;text-decoration:none;gap:8px}
 .how-tutorial-link{width:100%;min-height:43px;text-decoration:none;font-size:14px;margin-bottom:16px}
 
 @media(min-width:1101px){
@@ -62,22 +61,11 @@
 @media(max-width:600px){
   .store-card{min-height:148px}
   .store-details>summary small{max-width:110px;text-align:right}
-  .home-tutorial-link{font-size:12px}
+  
 }
 
 
 /* The home tabs stay in one position across Play, Your Games and Store. */
-.quick-play-button{
-  width:100%;margin-top:11px;min-height:57px;padding:10px 14px;
-  display:flex;align-items:center;justify-content:space-between;gap:12px;
-  border-color:rgba(239,195,104,.62);text-align:left
-}
-.quick-play-button>svg:first-child{color:#f5cb77}
-.quick-play-button>span{display:grid;gap:3px;flex:1}
-.quick-play-button strong{font-size:16px;color:#f9e1a2}
-.quick-play-button small{font-size:11px;color:#b9cec0;font-weight:400}
-.quick-play-button:disabled{opacity:.55}
-.home-tutorial-link{margin-top:10px}
 @media(min-width:1101px){
   .home-main,.home-main.store-active{
     max-width:1530px;grid-template-columns:minmax(285px,.78fr) minmax(0,1.22fr);
@@ -132,4 +120,52 @@
   .quick-play-button{min-height:50px}
   .quick-play-button strong{font-size:14px}
   .quick-play-button small{font-size:10px}
+}
+
+/* Unified start-screen actions. Create and Quick Play use the gold game
+   action; Practice uses the same silhouette with the existing outline style. */
+.start-panel .home-main-action{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:100%;
+  min-height:65px;
+  margin-top:12px;
+  padding:12px 18px;
+  gap:13px;
+  border-radius:14px;
+  font-size:25px;
+  font-weight:600;
+  line-height:1.2;
+  text-align:center;
+  text-decoration:none;
+  white-space:normal;
+}
+.start-panel .home-main-action>svg{
+  flex:0 0 auto;
+  width:29px;
+  height:29px;
+}
+.start-panel .create-button.home-main-action{margin-top:20px}
+.start-panel .home-tutorial-link.home-main-action{margin-top:12px}
+@media(max-width:1320px){
+  .start-panel .home-main-action{min-height:59px;font-size:22px}
+  .start-panel .home-main-action>svg{width:27px;height:27px}
+}
+@media(max-width:850px){
+  .start-panel .home-main-action{min-height:58px}
+}
+@media(max-width:600px){
+  .start-panel .home-main-action{
+    min-height:56px;font-size:21px;border-radius:12px;gap:10px;
+    padding:10px 12px
+  }
+  .start-panel .home-main-action>svg{width:24px;height:24px}
+  .start-panel .create-button.home-main-action{margin-top:17px}
+}
+@media(max-width:420px){
+  .start-panel .home-main-action{
+    font-size:clamp(14px,4.4vw,18px);gap:8px;padding:10px 9px
+  }
+  .start-panel .home-main-action>svg{width:21px;height:21px}
 }
