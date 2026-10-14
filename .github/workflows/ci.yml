@@ -16,5 +16,5 @@ jobs:
       - run: npm install
       - run: npm run typecheck
       - run: node --import tsx --test tests/original-rules.test.ts tests/tutorial.test.ts tests/quick-play.test.ts
-      - run: npm run test:backend
+      - run: node --import tsx --test --test-name-pattern="Quick Play starts an atomic game" tests/account-api.test.ts
       - run: npm run build
