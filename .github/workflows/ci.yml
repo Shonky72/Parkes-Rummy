@@ -15,5 +15,5 @@ jobs:
           node-version: 24
       - run: npm install
       - run: npm run typecheck
-      - run: node --import tsx --test tests/original-rules.test.ts
+      - run: node --import tsx --test tests/original-rules.test.ts tests/tutorial.test.ts
       - run: npm run build
