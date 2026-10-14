@@ -83,6 +83,28 @@ export default function TutorialGame() {
     if (settingsOpen) document.getElementById('tutorial-settings-done')?.focus({ preventScroll: true });
   }, [settingsOpen]);
 
+  // Keep the glowing target in view on phones, without scrolling on every card selection.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia('(max-width: 980px)').matches || lesson || settingsOpen) return;
+    const target: Partial<Record<TutorialPhase, string>> = {
+      sort: '.tutorial-sort-spot',
+      'sort-mode': '.tutorial-sort-spot',
+      settings: '.tutorial-settings-trigger',
+      'first-draw': '.tutorial-stock',
+      'first-discard': '.tutorial-hand',
+      'second-draw': '.tutorial-pile-block:nth-child(2) .tutorial-pile',
+      opening: '.tutorial-hand',
+      'second-discard': '.tutorial-hand',
+      'third-draw': '.tutorial-stock',
+      layoff: '.tutorial-hand',
+      'final-discard': '.tutorial-hand',
+    };
+    const frame = window.requestAnimationFrame(() => {
+      if (state.phase !== 'sort') document.querySelector(target[state.phase] || '.tutorial-guide')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [state.phase, lesson, settingsOpen]);
+
   const busy = lesson !== null || settingsOpen;
   const tip = tips[state.phase];
   const expectedIds = tutorialExpectedCardIds(state);
@@ -166,6 +188,7 @@ export default function TutorialGame() {
       </section>
 
       <section className="tutorial-table panel" aria-label="Practice card table">
+        <div className="tutorial-mobile-step" role="status"><strong>{tip.heading}</strong><span>{tip.action}</span></div>
         <div className="tutorial-table-head">
           <div className="tutorial-player"><span className="tutorial-avatar"><Bot size={19}/></span><div><strong>AI Alex</strong><small>Rule 1 of 10 · {opponentDown ? 'DOWN' : 'NOT DOWN'} · {opponentDown ? 5 : 10} cards</small></div></div>
           <span className="tutorial-rule">YOUR RULE: {RULES[1][0].title}</span>
