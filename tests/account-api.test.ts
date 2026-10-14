@@ -88,6 +88,25 @@ test('both schema entry points are repeatable and include the installed Better A
   }
 });
 
+test('Quick Play starts an atomic game with 1–7 computer players and no paid rules for guests', async () => {
+  const reply = await result(api.createRoomRequest(request('/api/rooms', { body: { name: 'Quick Player', quickPlay: true } })));
+  assert.equal(reply.status, 201, JSON.stringify(reply.data));
+  const { room, token } = reply.data;
+  assert.match(token, /^[a-f0-9]{64}$/);
+  assert.equal(room.status, 'playing');
+  assert.equal(room.round, 1);
+  assert.ok([1, 2, 3].includes(room.game), 'Guest Quick Play must not get Original Rules');
+  assert.ok(room.players.length >= 2 && room.players.length <= 8);
+  assert.equal(room.players.filter((p: { isBot: boolean }) => p.isBot).length, room.players.length - 1);
+  assert.ok(room.players.filter((p: { difficulty: string }) => p.difficulty === 'hard').length <= 1);
+  assert.equal(room.hand.length, 10);
+  const saved = (await repository.load(room.code))!;
+  assert.equal(saved.room.status, 'playing');
+  assert.equal(saved.room.players.length, room.players.length);
+  assert.equal(saved.memberships.length, 0);
+  assert.ok(saved.room.players.every(player => player.ready));
+});
+
 test('guest play keeps a random seat token and exposes only the caller’s cards', async () => {
   const host = await create('Guest host');
   assert.match(host.token, /^[a-f0-9]{64}$/);
