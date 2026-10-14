@@ -29,7 +29,8 @@ export const TUTORIAL_AI_REMAINING: readonly Card[] = [
 export const TUTORIAL_AI_PENALTY = handPoints([...TUTORIAL_AI_REMAINING]);
 
 const firstDraw = card('14S', 14, 'S');
-const firstDiscardId = '12D';
+const firstDiscard = card('12D', 12, 'D');
+const firstDiscardId = firstDiscard.id;
 const opponentFirstDiscard = card('9S', 9, 'S');
 const opponentSecondDiscard = card('11D', 11, 'D');
 const thirdDraw = card('14H', 14, 'H');
@@ -108,7 +109,7 @@ export function reduceTutorial(state: TutorialState, action: TutorialAction): Tu
       return { ...state, phase: 'first-discard', hand: [...state.hand, firstDraw], selected: [] };
     }
     if (state.phase === 'second-draw' && action.source === 'discard') {
-      return { ...state, phase: 'opening', hand: [...state.hand, opponentFirstDiscard], topDiscard: state.hand.find(item => item.id === firstDiscardId) || startingDiscard, selected: [] };
+      return { ...state, phase: 'opening', hand: [...state.hand, opponentFirstDiscard], topDiscard: firstDiscard, selected: [] };
     }
     if (state.phase === 'third-draw' && action.source === 'stock') {
       return { ...state, phase: 'layoff', hand: [...state.hand, thirdDraw], selected: [] };
