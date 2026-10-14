@@ -28,10 +28,10 @@ function PracticeCard({ card }: { card: Card }) {
 const tips: Record<TutorialPhase, { heading: string; text: string; action: string; number: number }> = {
   intro: { heading: 'Learn by playing', text: 'A friendly practice hand walks you through the main controls.', action: 'Begin', number: 0 },
   'first-draw': { heading: '1. Draw from the stock', text: 'Each turn begins with a draw. Tap the glowing face-down stock pile to collect a card.', action: 'Tap the stock', number: 1 },
-  'first-discard': { heading: '2. Discard to end your turn', text: 'You cannot Go Down on your first turn. Select the glowing 8 of diamonds, then press Discard.', action: 'Select 8♦, then Discard', number: 2 },
-  'second-draw': { heading: '3. Pick up a discard', text: 'The AI has left a 6 of diamonds on the discard pile. In a real game you choose between that card and the stock.', action: 'Tap the glowing discard', number: 3 },
+  'first-discard': { heading: '2. Discard to end your turn', text: 'You cannot Go Down on your first turn. Select the highlighted queen of diamonds and press Discard to keep the cards you need.', action: 'Select Q♦, then Discard', number: 2 },
+  'second-draw': { heading: '3. Pick up a discard', text: 'The AI discarded a 9 of spades, the missing card for your opening run. Tap the discard pile to pick it up.', action: 'Tap the glowing discard', number: 3 },
   opening: { heading: '4. Make a run of five', text: 'Rule 1 requires five consecutive ranks. Select the highlighted 5, 6, 7, wild 2 and 9. The 2 represents an 8.', action: 'Select five cards, then Go Down', number: 4 },
-  'second-discard': { heading: '5. Finish the turn', text: 'Your run is now on the table. The remaining 6 of diamonds is your discard. You add to melds on your next turn.', action: 'Select 6♦, then Discard', number: 5 },
+  'second-discard': { heading: '5. Finish the turn', text: 'Your run is now on the table. Discard your ace of spades. Aces carry a 20-point penalty if still in your hand when someone goes out.', action: 'Select A♠, then Discard', number: 5 },
   'third-draw': { heading: '6. Draw again', text: 'The AI has also gone down with a run. Both runs are visible, and you may add to either from this turn onward.', action: 'Tap the stock', number: 6 },
   layoff: { heading: '7. Add to exposed runs', text: 'Select the highlighted card and tap the glowing run. Start with 10♣, then J♥, Q♠, K♦. Finish with 10♦ on the AI run.', action: 'Select a card, then tap the matching run', number: 7 },
   'final-discard': { heading: '8. Go out!', text: 'One card remains, the ace of hearts. Discard it to empty your hand and win this practice hand.', action: 'Select A♥, then Discard', number: 8 },
