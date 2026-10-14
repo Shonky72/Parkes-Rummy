@@ -126,7 +126,6 @@
 }
 @media(max-width:850px){
   .home-main.store-active{align-items:start}
-  .home-main.store-active .start-panel{padding:inherit}
   .home-main.store-active .hero-card-fan{transform-origin:top center}
 }
 @media(max-width:600px){
