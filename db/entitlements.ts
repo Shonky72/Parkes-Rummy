@@ -73,15 +73,15 @@ export function isFullAccessAdmin(email: string) {
 }
 
 async function fullAccessGranted(userId: string) {
-  const result = await database.query<{ granted: boolean }>(
-    `SELECT EXISTS (
-       SELECT 1 FROM "user" u
-       JOIN premium_access_grants g ON g.email = lower(u.email)
-       WHERE u.id = $1
-     ) AS granted`,
+  const result = await database.query<{ email: string; granted: boolean }>(
+    `SELECT lower(u.email) AS email,
+            EXISTS (SELECT 1 FROM premium_access_grants g WHERE g.email = lower(u.email)) AS granted
+       FROM "user" u
+      WHERE u.id = $1`,
     [userId],
   );
-  return Boolean(result.rows[0]?.granted);
+  const row = result.rows[0];
+  return Boolean(row && (row.granted || isFullAccessAdmin(row.email)));
 }
 
 export async function hasEntitlement(userId: string, entitlement: EntitlementKey) {

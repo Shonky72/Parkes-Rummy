@@ -963,9 +963,9 @@ function ParkesGame({ initialCode, account }: { initialCode?: string; account: A
               {row.ruleNumber !== undefined && <small className={`history-rule-outcome ${row.melded ? 'rule-advanced' : ''}`}>{ruleOutcome(row,result.round,room.status === 'finished' && result.round === room.round)}</small>}
             </div>)}</div>
           </details>)}</section>}
-        </div><aside className="full-rule-panel panel"><h2>Game {rulesGame} · Rule list</h2>
+        </div><aside className="full-rule-panel panel"><h2>{gameLabel(rulesGame)} · Rule list</h2>
           <RuleList game={rulesGame} current={rulesGame===room.game?currentRuleNumber:undefined} players={rulesGame===room.game?room.players:undefined} fallbackRound={room.round} youId={room.youId}/>
-          <p className="rule-panel-note">{rulesGame===room.game?'Your rule is highlighted. Avatars show each player’s current rule.':`Your table is playing Game ${room.game}. Viewing the Game ${rulesGame} rule list.`}</p>
+          <p className="rule-panel-note">{rulesGame===room.game?'Your rule is highlighted. Avatars show each player’s current rule.':`Your table is playing ${gameLabel(room.game)}. Viewing the ${gameLabel(rulesGame)} rule list.`}</p>
         </aside></div>
       </main>}
 
