@@ -22,7 +22,9 @@ export function ensureStoreSchema() {
     await database.query('CREATE INDEX IF NOT EXISTS purchase_receipts_payment_intent_idx ON purchase_receipts(payment_intent)');
     await database.query(`CREATE TABLE IF NOT EXISTS payment_events (
       event_id text PRIMARY KEY, event_type text NOT NULL, created_at timestamptz NOT NULL DEFAULT now())`);
-    await database.query(`CREATE TABLE IF NOT EXISTS premium_access_grants (\n      email text PRIMARY KEY, note text NOT NULL DEFAULT '', granted_at timestamptz NOT NULL DEFAULT now(), granted_by text NOT NULL)`);\n    await database.query(`CREATE TABLE IF NOT EXISTS player_profiles (
+    await database.query(`CREATE TABLE IF NOT EXISTS premium_access_grants (
+      email text PRIMARY KEY, note text NOT NULL DEFAULT '', granted_at timestamptz NOT NULL DEFAULT now(), granted_by text NOT NULL)`);
+    await database.query(`CREATE TABLE IF NOT EXISTS player_profiles (
       user_id text PRIMARY KEY REFERENCES "user"("id") ON DELETE CASCADE,
       font_id text NOT NULL DEFAULT 'default', symbol_id text NOT NULL DEFAULT 'initials', updated_at timestamptz NOT NULL DEFAULT now())`);
     await database.query(`CREATE TABLE IF NOT EXISTS voice_presence (
