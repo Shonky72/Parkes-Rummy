@@ -125,8 +125,8 @@ function validateAction(value: unknown): GameAction {
       if (action.expectedVersion !== undefined && (typeof action.expectedVersion !== 'number' || !Number.isSafeInteger(action.expectedVersion) || action.expectedVersion < 1)) throw new ApiError('Refresh your games before starting a rematch.');
       return { type: 'rematch', expectedVersion: action.expectedVersion as number | undefined };
     case 'setGame':
-      if (action.game !== 1 && action.game !== 2 && action.game !== 3) throw new ApiError('Choose Game 1, Game 2 or Game 3.');
-      return { type: 'setGame', game: action.game };
+      if (![1,2,3,4].includes(action.game as number)) throw new ApiError('Choose Game 1, Game 2, Game 3 or Original Rules.');
+      return { type: 'setGame', game: action.game as 1|2|3|4 };
     case 'setMoveHints':
       if (typeof action.enabled !== 'boolean') throw new ApiError('Choose whether move hints are on or off.');
       return { type: 'setMoveHints', enabled: action.enabled };
@@ -316,6 +316,12 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
         if (action.type === 'rematch' && action.expectedVersion !== undefined && player.id === room.hostId
           && (room.status !== 'finished' || action.expectedVersion !== room.version)) {
           return reply({ error: 'This game has changed. Review the latest table before starting a rematch.', room: publicRoom(room, player.id) }, 409);
+        }
+        if ((action.type === 'setGame' && action.game === 4) || (action.type === 'start' && room.game === 4)) {
+          if (player.id !== room.hostId) throw new ApiError('Only the host controls this setting.', 403);
+          if (!identity.user) throw new ApiError('Sign in and unlock Original Rules to host this ruleset. Guests can join free.', 403);
+          const entitlements = await getEntitlements(identity.user.id);
+          if (!entitlements.originalRules) throw new ApiError('Original Rules is a one-off A$0.99 host unlock. Guests can join your table without buying it.', 403);
         }
         if (action.type === 'goDown') {
           const view = publicRoom(room, player.id);

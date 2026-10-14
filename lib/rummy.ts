@@ -53,6 +53,18 @@ export const RULES: Record<GameType, RuleDefinition[]> = {
     rule(9, '2 × 4 of a kind + a pair', 'Two separate groups of four matching ranks and a matching pair. Any two works as a wild.', [set(4), set(4), set(2)]),
     rule(10, '8 of a kind + a natural pair of hearts', 'Eight matching ranks plus two natural hearts of the same rank. Twos work in the eight-card set only; the heart pair has no twos.', [set(8), set(2, { constraint: 'hearts', naturalOnly: true })]),
   ],
+  4: [
+    rule(1, '4 of a kind: two suit pairs', 'Four matching ranks made from two cards of one suit and two cards of another suit. Twos may substitute only as their printed suit.', [set(4)]),
+    rule(2, '4 of a kind + 3 of a kind + pair, no twos', 'Three separate natural sets: four matching ranks, three matching ranks and a pair. No twos anywhere in the opening meld.', [set(4, { naturalOnly: true }), set(3, { naturalOnly: true }), set(2, { naturalOnly: true })]),
+    rule(3, 'Run of 10, one colour, no twos', 'A natural 5-through-Ace run of ten cards, all red or all black. No twos.', [run(10, { constraint: 'same-colour', naturalOnly: true })]),
+    rule(4, '3 × 3 of a kind, special twos', 'Three separate triples. Twos cannot act as wilds; they are allowed only when three twos form one complete triple.', [set(3), set(3), set(3)]),
+    rule(5, 'Run of 6, alternating colours', 'Six consecutive cards alternating red and black. Twos match the colour of their position. The alternating pattern must continue after laydown.', [run(6, { constraint: 'alternate', wildsMatch: true, persistentConstraint: true })]),
+    rule(6, 'Royal Flush', '10, Jack, Queen, King and Ace in one suit. A two may replace a missing rank only when its printed suit matches the Royal Flush.', [run(5, { constraint: 'same-suit', wildsMatch: true })]),
+    rule(7, '2 × 4 of a kind, each one colour', 'Two separate groups of four matching ranks. Every card in each group must be one colour. Twos match that group’s colour.', [set(4), set(4)]),
+    rule(8, '4 pairs, one of each suit', 'Four pairs: one Clubs pair, one Diamonds pair, one Hearts pair and one Spades pair. Twos may substitute only in their printed suit.', [set(2), set(2), set(2), set(2)]),
+    rule(9, 'Run of 6 + pair of Aces', 'A six-card run plus a pair of Aces. A two replacing an Ace must have the same printed suit as the Ace it pairs with.', [run(6), set(2)]),
+    rule(10, 'Hand of Hearts: run of 5 + 3 of a kind', 'Five consecutive Hearts plus three Hearts of the same rank. The entire opening meld is Hearts. Only 2♥ may act as a wild.', [run(5, { constraint: 'hearts', wildsMatch: true }), set(3, { constraint: 'hearts', wildsMatch: true })]),
+  ],
 };
 
 export class GameError extends Error {
@@ -173,6 +185,9 @@ function suitPatterns(requirement: Requirement, count: number): SuitPattern[] {
     case 'red': return [repeated(RED)];
     case 'black': return [repeated(BLACK)];
     case 'hearts': return [repeated(['H'])];
+    case 'clubs': return [repeated(['C'])];
+    case 'diamonds': return [repeated(['D'])];
+    case 'spades': return [repeated(['S'])];
     case 'same-colour': return [repeated(RED, 'red'), repeated(BLACK, 'black')];
     case 'same-suit': return SUITS.map(suit => repeated([suit]));
     case 'one-each-suit': return [{ allowed: Array.from({ length: count }, () => SUITS), unique: true, constraint }];
@@ -214,7 +229,7 @@ function matchSet(cards: Card[], requirement: Requirement): Meld | null {
       }
       return false;
     };
-    if (solve(0, new Set())) return { id: '', ownerId: '', kind: 'set', cards: result, constraint: pattern.constraint, naturalOnly: requirement.naturalOnly, wildsMatch: requirement.wildsMatch };
+    if (solve(0, new Set())) return { id: '', ownerId: '', kind: 'set', cards: result, constraint: pattern.constraint, naturalOnly: requirement.naturalOnly, wildsMatch: requirement.wildsMatch, persistentConstraint: requirement.persistentConstraint };
   }
   return null;
 }
@@ -247,7 +262,7 @@ function matchRun(cards: Card[], requirement: Requirement): Meld | null {
         }
         return false;
       };
-      if (solve(0, 0, new Set())) return { id: '', ownerId: '', kind: 'run', cards: result, constraint: pattern.constraint, naturalOnly: requirement.naturalOnly, wildsMatch: requirement.wildsMatch };
+      if (solve(0, 0, new Set())) return { id: '', ownerId: '', kind: 'run', cards: result, constraint: pattern.constraint, naturalOnly: requirement.naturalOnly, wildsMatch: requirement.wildsMatch, persistentConstraint: requirement.persistentConstraint };
     }
   }
   return null;
@@ -304,11 +319,136 @@ function searchOpening(cards: Card[], definition: RuleDefinition): Meld[] | null
   return null;
 }
 
+function customSetMeld(cards: Card[], asRank: number, constraint: MeldConstraint = 'any', wildsMatch = false): Meld {
+  return { id: '', ownerId: '', kind: 'set', cards: cards.map(card => tableCard(card, asRank, card.suit)), constraint, wildsMatch };
+}
+function naturalSetRank(cards: Card[]): number | null {
+  if (!cards.length || cards.some(card => card.rank === 2)) return null;
+  const rank = rankOf(cards[0]);
+  return cards.every(card => rankOf(card) === rank) ? rank : null;
+}
+function representedSetRank(cards: Card[]): number | null {
+  const naturals = cards.filter(card => card.rank !== 2);
+  if (!naturals.length) return 5;
+  const rank = rankOf(naturals[0]);
+  return naturals.every(card => rankOf(card) === rank) ? rank : null;
+}
+function maskWithout(length: number, used: number) { return ((1 << length) - 1) ^ used; }
+
+function findOriginalOpeningMelds(cards: Card[], round: number): Meld[] | null {
+  if (round === 1) {
+    const rank = representedSetRank(cards);
+    if (rank === null) return null;
+    const suitCounts = new Map<Suit, number>();
+    for (const card of cards) suitCounts.set(card.suit, (suitCounts.get(card.suit) ?? 0) + 1);
+    if (suitCounts.size !== 2 || [...suitCounts.values()].some(count => count !== 2)) return null;
+    return [customSetMeld(cards, rank)];
+  }
+  if (round === 2) {
+    for (const fourMask of combinations(cards.length, 4)) {
+      const four = cardsForMask(cards, fourMask), fourRank = naturalSetRank(four);
+      if (fourRank === null) continue;
+      const remainingAfterFour = maskWithout(cards.length, fourMask);
+      for (const threeMask of combinations(cards.length, 3)) {
+        if (threeMask & ~remainingAfterFour) continue;
+        const three = cardsForMask(cards, threeMask), threeRank = naturalSetRank(three);
+        if (threeRank === null || threeRank === fourRank) continue;
+        const pairMask = remainingAfterFour ^ threeMask;
+        const pair = cardsForMask(cards, pairMask), pairRank = naturalSetRank(pair);
+        if (pair.length !== 2 || pairRank === null || pairRank === fourRank || pairRank === threeRank) continue;
+        return [customSetMeld(four, fourRank), customSetMeld(three, threeRank), customSetMeld(pair, pairRank)];
+      }
+    }
+    return null;
+  }
+  if (round === 3) {
+    const meld = matchRun(cards, run(10, { constraint: 'same-colour', naturalOnly: true }));
+    return meld ? [meld] : null;
+  }
+  if (round === 4) {
+    const tripleRank = (group: Card[]) => group.every(card => card.rank === 2) ? 2 : naturalSetRank(group);
+    for (const firstMask of combinations(cards.length, 3)) {
+      const first = cardsForMask(cards, firstMask), firstRank = tripleRank(first);
+      if (firstRank === null) continue;
+      const remainingAfterFirst = maskWithout(cards.length, firstMask);
+      for (const secondMask of combinations(cards.length, 3)) {
+        if (secondMask & ~remainingAfterFirst) continue;
+        const second = cardsForMask(cards, secondMask), secondRank = tripleRank(second);
+        if (secondRank === null || secondRank === firstRank) continue;
+        const thirdMask = remainingAfterFirst ^ secondMask;
+        const third = cardsForMask(cards, thirdMask), thirdRank = tripleRank(third);
+        if (third.length !== 3 || thirdRank === null || thirdRank === firstRank || thirdRank === secondRank) continue;
+        return [customSetMeld(first, firstRank), customSetMeld(second, secondRank), customSetMeld(third, thirdRank)];
+      }
+    }
+    return null;
+  }
+  if (round === 5) {
+    const meld = matchRun(cards, run(6, { constraint: 'alternate', wildsMatch: true, persistentConstraint: true }));
+    return meld ? [meld] : null;
+  }
+  if (round === 6) {
+    if (cards.length !== 5 || cards.some(card => card.suit !== cards[0].suit)) return null;
+    const naturals = cards.filter(card => card.rank !== 2);
+    if (naturals.some(card => rankOf(card) < 10 || rankOf(card) > 14) || new Set(naturals.map(rankOf)).size !== naturals.length) return null;
+    const fixed = new Map(naturals.map(card => [rankOf(card), card]));
+    const wilds = cards.filter(card => card.rank === 2);
+    let wildIndex = 0;
+    const ordered: TableCard[] = [];
+    for (let rank = 10; rank <= 14; rank++) {
+      const card = fixed.get(rank) ?? wilds[wildIndex++];
+      if (!card) return null;
+      ordered.push(tableCard(card, rank, cards[0].suit));
+    }
+    return [{ id:'', ownerId:'', kind:'run', cards:ordered, constraint:'same-suit', wildsMatch:true }];
+  }
+  if (round === 7) {
+    const groupInfo = (group: Card[]) => {
+      const rank = representedSetRank(group); if (rank === null) return null;
+      const red = isRed(group[0].suit); if (group.some(card => isRed(card.suit) !== red)) return null;
+      return { rank, constraint: (red ? 'red' : 'black') as MeldConstraint };
+    };
+    for (const firstMask of combinations(cards.length, 4)) {
+      const first = cardsForMask(cards, firstMask), firstInfo = groupInfo(first); if (!firstInfo) continue;
+      const second = cardsForMask(cards, maskWithout(cards.length, firstMask)), secondInfo = groupInfo(second); if (!secondInfo) continue;
+      let firstRank = firstInfo.rank, secondRank = secondInfo.rank;
+      if (first.every(card => card.rank === 2) && firstRank === secondRank) firstRank = secondRank === 5 ? 6 : 5;
+      if (second.every(card => card.rank === 2) && firstRank === secondRank) secondRank = firstRank === 5 ? 6 : 5;
+      if (firstRank === secondRank) continue;
+      return [customSetMeld(first, firstRank, firstInfo.constraint, true), customSetMeld(second, secondRank, secondInfo.constraint, true)];
+    }
+    return null;
+  }
+  if (round === 8) {
+    const names: Record<Suit, MeldConstraint> = { C:'clubs', D:'diamonds', H:'hearts', S:'spades' };
+    const melds: Meld[] = [];
+    for (const suit of SUITS) {
+      const pair = cards.filter(card => card.suit === suit);
+      if (pair.length !== 2) return null;
+      const rank = representedSetRank(pair); if (rank === null) return null;
+      melds.push(customSetMeld(pair, rank, names[suit], true));
+    }
+    return melds;
+  }
+  if (round === 9) {
+    for (const pairMask of combinations(cards.length, 2)) {
+      const pair = cardsForMask(cards, pairMask), naturals = pair.filter(card => card.rank !== 2), twos = pair.filter(card => card.rank === 2);
+      if (naturals.some(card => rankOf(card) !== 14) || (twos.length && (naturals.length !== 1 || twos[0].suit !== naturals[0].suit))) continue;
+      const runCards = cardsForMask(cards, maskWithout(cards.length, pairMask));
+      const runMeld = matchRun(runCards, run(6)); if (!runMeld) continue;
+      return [runMeld, customSetMeld(pair, 14)];
+    }
+    return null;
+  }
+  if (round === 10) return searchMelds(cards, [run(5, { constraint:'hearts', wildsMatch:true }), set(3, { constraint:'hearts', wildsMatch:true })]);
+  return null;
+}
+
 export function findOpeningMelds(cards: Card[], game: GameType, round: number): Meld[] | null {
   const definition = RULES[game]?.[round - 1];
   if (!definition || cards.length !== definition.requirements.reduce((sum, requirement) => sum + requirement.count, 0)) return null;
   if (new Set(cards.map(card => card.id)).size !== cards.length || cards.some(card => !validCard(card))) return null;
-  const melds = searchOpening(cards, definition);
+  const melds = game === 4 ? findOriginalOpeningMelds(cards, round) : searchOpening(cards, definition);
   return melds?.map((meld, index) => ({ ...meld, id: `opening-${index + 1}` })) ?? null;
 }
 
@@ -334,6 +474,13 @@ export function getLayoffGroupTargets(cards: Card[], melds: Meld[]): GroupLayoff
     if (!meld.cards.length) continue;
     if (meld.kind === 'set') {
       const asRank = shownRank(meld.cards[0]);
+      if (asRank === 2) {
+        if (cards.every(card => card.rank === 2)) {
+          const additions = cards.map(card => tableCard(card, 2, card.suit));
+          targets.push({ meldId: meld.id, end: 'end', asRank:2, asSuit:additions[0].suit, cards:additions });
+        }
+        continue;
+      }
       if (!Number.isInteger(asRank) || asRank < 5 || asRank > 14 || naturals.some(card => rankOf(card) !== asRank)) continue;
       const additions = [...naturals, ...wilds].map(card => tableCard(card, asRank, card.suit));
       targets.push({ meldId: meld.id, end: 'end', asRank, asSuit: additions[0].suit, cards: additions });
@@ -351,6 +498,16 @@ export function getLayoffGroupTargets(cards: Card[], melds: Meld[]): GroupLayoff
           const card = naturalByRank.get(rank) ?? wilds[wildIndex++];
           return tableCard(card, rank, card.suit);
         });
+        if (meld.persistentConstraint && meld.constraint === 'alternate') {
+          const edgeCard = end === 'start' ? meld.cards[0] : meld.cards[meld.cards.length - 1];
+          let expectedRed = !isRed(edgeCard.asSuit ?? edgeCard.suit);
+          let validPattern = true;
+          for (const addition of additions) {
+            if (isRed(addition.suit) !== expectedRed) { validPattern = false; break; }
+            expectedRed = !expectedRed;
+          }
+          if (!validPattern) continue;
+        }
         targets.push({ meldId: meld.id, end, asRank: ranks[0], asSuit: additions[0].suit, cards: additions });
       }
     }
@@ -559,7 +716,7 @@ export function applyAction(original: RoomState, actorId: string, action: GameAc
     }
     case 'setGame': {
       requireHost(room, actor); requireLobby(room);
-      if (action.game !== 1 && action.game !== 2 && action.game !== 3) throw new GameError('Choose Game 1, Game 2 or Game 3.');
+      if (![1,2,3,4].includes(action.game)) throw new GameError('Choose Game 1, Game 2, Game 3 or Original Rules.');
       room.game = action.game;
       event(room, 'settings', `${actor.name} selected Game ${room.game}.`, actor.id);
       break;

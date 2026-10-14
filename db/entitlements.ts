@@ -100,8 +100,13 @@ export async function getEntitlements(userId: string): Promise<EntitlementSnapsh
   await ensureStoreSchema();
   if (!userId) return EMPTY_ENTITLEMENTS;
   if (await fullAccessGranted(userId)) return { removeAds:true, premiumFonts:true, premiumSymbols:true, voiceChat:true, originalRules:true };
-  const result = await database.query<{ entitlement: string }>('SELECT entitlement FROM user_entitlements WHERE user_id = $1', [userId]);
-  return snapshotFromKeys(new Set(result.rows.map(row => row.entitlement)));
+  const [result, purchases] = await Promise.all([
+    database.query<{ entitlement: string }>('SELECT entitlement FROM user_entitlements WHERE user_id = $1', [userId]),
+    database.query<{ product_key: StoreProductKey }>("SELECT product_key FROM purchase_receipts WHERE user_id = $1 AND status = 'paid'", [userId]),
+  ]);
+  const keys = new Set(result.rows.map(row => row.entitlement));
+  for (const row of purchases.rows) for (const entitlement of STORE_PRODUCTS[row.product_key]?.grants ?? []) keys.add(entitlement);
+  return snapshotFromKeys(keys);
 }
 
 export interface FullAccessGrant { email: string; note: string; grantedAt: string; grantedBy: string }

@@ -1,17 +1,17 @@
 import type { FontId, SymbolId } from './store-catalog';
 export type Suit = 'C' | 'D' | 'H' | 'S';
-export type GameType = 1 | 2 | 3;
+export type GameType = 1 | 2 | 3 | 4;
 export type Difficulty = 'easy' | 'medium' | 'hard';
 export interface Card { id: string; rank: number; suit: Suit }
 export interface TableCard extends Card { asRank?: number; asSuit?: Suit }
-export type MeldConstraint = 'any' | 'same-colour' | 'same-suit' | 'one-each-suit' | 'one-each-suit-alternate' | 'red' | 'black' | 'alternate' | 'hearts';
+export type MeldConstraint = 'any' | 'same-colour' | 'same-suit' | 'one-each-suit' | 'one-each-suit-alternate' | 'red' | 'black' | 'alternate' | 'hearts' | 'clubs' | 'diamonds' | 'spades';
 export interface Meld {
   id: string; ownerId: string; kind: 'set' | 'run'; cards: TableCard[];
-  constraint: MeldConstraint; naturalOnly?: boolean; wildsMatch?: boolean;
+  constraint: MeldConstraint; naturalOnly?: boolean; wildsMatch?: boolean; persistentConstraint?: boolean;
 }
 export interface Requirement {
   kind: 'set' | 'run'; count: number; constraint?: MeldConstraint;
-  naturalOnly?: boolean; wildsMatch?: boolean;
+  naturalOnly?: boolean; wildsMatch?: boolean; persistentConstraint?: boolean;
 }
 export interface RuleDefinition {
   number: number; title: string; description: string; requirements: Requirement[];

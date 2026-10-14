@@ -12,6 +12,7 @@ function ownsProduct(key: StoreProductKey, entitlements: Awaited<ReturnType<type
   if (entitlements.premiumFonts) owned.add('premium_fonts');
   if (entitlements.premiumSymbols) owned.add('premium_symbols');
   if (entitlements.voiceChat) owned.add('voice_chat');
+  if (entitlements.originalRules) owned.add('original_rules');
   return STORE_PRODUCTS[key].grants.every(grant => owned.has(grant));
 }
 export async function POST(request: Request) {
