@@ -16,4 +16,5 @@ jobs:
       - run: npm install
       - run: npm run typecheck
       - run: node --import tsx --test tests/original-rules.test.ts tests/tutorial.test.ts tests/quick-play.test.ts
+      - run: npm run test:backend
       - run: npm run build
