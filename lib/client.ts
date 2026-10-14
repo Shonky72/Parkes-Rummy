@@ -226,7 +226,7 @@ async function request<T>(path: string, options: { method?: string; body?: unkno
   }
 }
 export const roomApi = {
-  create: (name: string) => request<{ room: PublicRoom; token: string }>('/api/rooms', { method: 'POST', body: { name } }),
+  create: (name: string, quickPlay = false) => request<{ room: PublicRoom; token: string }>('/api/rooms', { method: 'POST', body: { name, ...(quickPlay ? { quickPlay: true } : {}) } }),
   preview: (code: string) => request<{ preview: RoomPreview }>(`/api/rooms/${encodeURIComponent(code)}/preview`),
   join: (code: string, name: string, token?: string) => request<{ room: PublicRoom; token: string }>(`/api/rooms/${encodeURIComponent(code)}/join`, { method: 'POST', body: { name, ...(token ? { token } : {}) } }),
   get: (code: string, token: string, signal?: AbortSignal) => request<{ room: PublicRoom }>(`/api/rooms/${encodeURIComponent(code)}`, { token, signal }),
