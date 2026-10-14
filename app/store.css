@@ -64,3 +64,73 @@
   .store-details>summary small{max-width:110px;text-align:right}
   .home-tutorial-link{font-size:12px}
 }
+
+
+/* The home tabs stay in one position across Play, Your Games and Store. */
+.quick-play-button{
+  width:100%;margin-top:11px;min-height:57px;padding:10px 14px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  border-color:rgba(239,195,104,.62);text-align:left
+}
+.quick-play-button>svg:first-child{color:#f5cb77}
+.quick-play-button>span{display:grid;gap:3px;flex:1}
+.quick-play-button strong{font-size:16px;color:#f9e1a2}
+.quick-play-button small{font-size:11px;color:#b9cec0;font-weight:400}
+.quick-play-button:disabled{opacity:.55}
+.home-tutorial-link{margin-top:10px}
+@media(min-width:1101px){
+  .home-main,.home-main.store-active{
+    max-width:1530px;grid-template-columns:minmax(285px,.78fr) minmax(0,1.22fr);
+    align-items:start;gap:32px;min-height:calc(100dvh - 122px);
+    padding:14px 3.2% 45px;margin:7px auto 0
+  }
+  .home-main .home-hero,.home-main.store-active .home-hero{align-self:center}
+  .home-main .hero-title,.home-main.store-active .hero-title{
+    font-size:clamp(72px,7.6vw,122px);letter-spacing:-4.5px
+  }
+  .home-main .hero-card-fan,.home-main.store-active .hero-card-fan{
+    width:100%;max-width:560px;height:270px;transform:scale(.76);
+    transform-origin:top center;margin:20px auto -9px
+  }
+  .home-main .start-panel,.home-main.store-active .start-panel{
+    padding:25px 27px 22px;border-radius:24px
+  }
+  .home-main .start-panel>h2,.home-main.store-active .start-panel>h2{
+    font-family:Arial,Helvetica,sans-serif;font-size:48px;
+    line-height:1.15;margin-bottom:22px;letter-spacing:-1.3px
+  }
+  .home-main .account-controls,.home-main.store-active .account-controls{margin-bottom:16px}
+  .home-main .home-play-tabs,.home-main.store-active .home-play-tabs{margin:-7px 0 20px}
+  .home-main .store-items,.home-main.store-active .store-items{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .home-main .store-heading h3,.home-main.store-active .store-heading h3{font-size:25px}
+}
+@media(min-width:851px) and (max-width:1100px){
+  .home-main,.home-main.store-active{
+    grid-template-columns:minmax(220px,.58fr) minmax(0,1.42fr);
+    align-items:start;gap:16px;max-width:1100px;padding:14px 18px 35px;margin:7px auto 0
+  }
+  .home-main .hero-title,.home-main.store-active .hero-title{
+    font-size:clamp(62px,7vw,84px);letter-spacing:-3px
+  }
+  .home-main .hero-card-fan,.home-main.store-active .hero-card-fan{
+    height:215px;width:100%;max-width:410px;transform:scale(.67);
+    transform-origin:top center;margin:15px auto -14px
+  }
+  .home-main .start-panel,.home-main.store-active .start-panel{padding:19px 19px 20px;border-radius:21px}
+  .home-main .start-panel>h2,.home-main.store-active .start-panel>h2{
+    font-size:36px;line-height:1.15;margin-bottom:15px
+  }
+  .home-main .account-controls,.home-main.store-active .account-controls{margin-bottom:13px}
+  .home-main .home-play-tabs,.home-main.store-active .home-play-tabs{margin:-7px 0 18px}
+  .home-main .store-items,.home-main.store-active .store-items{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:850px){
+  .home-main.store-active{align-items:start}
+  .home-main.store-active .start-panel{padding:inherit}
+  .home-main.store-active .hero-card-fan{transform-origin:top center}
+}
+@media(max-width:600px){
+  .quick-play-button{min-height:50px}
+  .quick-play-button strong{font-size:14px}
+  .quick-play-button small{font-size:10px}
+}
