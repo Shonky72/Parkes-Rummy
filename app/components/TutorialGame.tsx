@@ -41,7 +41,7 @@ const tips: Record<TutorialPhase, { heading: string; text: string; action: strin
 
 const milestoneCopy: Partial<Record<TutorialPhase, { heading: string; text: string }>> = {
   'second-draw': { heading: 'First turn complete', text: 'Well done. You have completed the compulsory first turn without going down. Now you are allowed to meet your rule.' },
-  'second-discard': { heading: 'You went down!', text: 'The 2 stood in for an 8, making the run 5-6-7-8-9. Going down reveals those cards to the table. Discard one card, then you may add to exposed runs on later turns.' },
+  'second-discard': { heading: 'You went down!', text: 'The 2 stood in for an 8, making the run 5-6-7-8-9. Going down reveals those cards to the table. Other rules also use sets (cards sharing a rank), and stricter colour and suit combinations. Discard one card now; add to exposed melds on later turns.' },
   layoff: { heading: 'Look at the shared table', text: 'Your run and the AI run are exposed. After going down on an earlier turn, you may extend either one. Select the highlighted card, then tap the matching run.' },
 };
 
@@ -104,6 +104,7 @@ export default function TutorialGame() {
         </div>
         <h1>{tip.heading}</h1><p>{tip.text}</p>
         <div className="tutorial-next"><CircleHelp size={17}/><strong>{tip.action}</strong></div>
+        <details className="tutorial-cheat"><summary>House rules and card values</summary><p>2s are wild. 3s and 4s are removed. 5–7 = 5 points, 8–K = 10 points, Ace and 2 = 20 points. The lowest overall score wins.</p></details>
       </section>
 
       <section className="tutorial-table panel" aria-label="Practice card table">
