@@ -146,17 +146,23 @@ export default function TutorialGame() {
     <header className="site-header tutorial-header">
       <GameLogo/>
       <span className="tutorial-mode"><Sparkles size={16}/>Guided practice · Game 1</span>
-      <a className="button outline small tutorial-exit" href="/"><ArrowLeft size={16}/>Exit tutorial</a>
+      <div className="tutorial-header-actions">
+        <div className="tutorial-settings-spot">
+          <button type="button" className={'button outline small tutorial-settings-trigger' + (state.phase === 'settings' ? ' tutorial-glow' : '')} onClick={() => setSettingsOpen(true)}><Settings size={17}/>Settings</button>
+          {state.phase === 'settings' && <span className="tutorial-coach tutorial-coach-below"><ArrowDown size={15}/>Tap Settings here</span>}
+        </div>
+        <a className="button outline small tutorial-exit" href="/"><ArrowLeft size={16}/>Exit tutorial</a>
+      </div>
     </header>
     <main className="tutorial-main">
       <section className="tutorial-guide panel" aria-label="Tutorial instructions" aria-live="polite">
-        <div className="tutorial-progress-top"><span>LEARN PARKES RUMMY</span><strong>{Math.min(tip.number, 8)} / 8</strong></div>
-        <div className="tutorial-progress" role="progressbar" aria-label="Tutorial progress" aria-valuemin={0} aria-valuemax={8} aria-valuenow={Math.min(tip.number, 8)}>
-          <span style={{ width: Math.min(100, tip.number / 8 * 100) + '%' }}/>
+        <div className="tutorial-progress-top"><span>LEARN PARKES RUMMY</span><strong>{Math.min(tip.number, TOTAL_STEPS)} / {TOTAL_STEPS}</strong></div>
+        <div className="tutorial-progress" role="progressbar" aria-label="Tutorial progress" aria-valuemin={0} aria-valuemax={TOTAL_STEPS} aria-valuenow={Math.min(tip.number, TOTAL_STEPS)}>
+          <span style={{ width: Math.min(100, tip.number / TOTAL_STEPS * 100) + '%' }}/>
         </div>
         <h1>{tip.heading}</h1><p>{tip.text}</p>
         <div className="tutorial-next"><CircleHelp size={17}/><strong>{tip.action}</strong></div>
-        <details className="tutorial-cheat"><summary>House rules and card values</summary><p>2s are wild. 3s and 4s are removed. 5–7 = 5 points, 8–K = 10 points, Ace and 2 = 20 points. The lowest overall score wins.</p></details>
+        <TutorialRulesVisual/>
       </section>
 
       <section className="tutorial-table panel" aria-label="Practice card table">
@@ -181,14 +187,16 @@ export default function TutorialGame() {
         </div>
         <div className="tutorial-piles" aria-label="Draw and discard piles">
           <div className="tutorial-pile-block">
-            <span>STOCK</span>
+            <span>DRAW PILE</span>
+            {isDrawingStock && <span className="tutorial-coach tutorial-pile-pointer">Tap here <ArrowDown size={13}/></span>}
             <button className={'tutorial-pile' + (isDrawingStock ? ' tutorial-glow' : '')} type="button" disabled={busy || !isDrawingStock}
               aria-label="Draw a face-down card from the stock" onClick={() => dispatch({ type: 'draw', source: 'stock' })}>
               <span className="tutorial-back tutorial-stock card-back"><span/></span>
             </button>
           </div>
           <div className="tutorial-pile-block">
-            <span>DISCARD</span>
+            <span>DISCARD PILE</span>
+            {isDrawingDiscard && <span className="tutorial-coach tutorial-pile-pointer">Take the 9♠ <ArrowDown size={13}/></span>}
             <button className={'tutorial-pile' + (isDrawingDiscard ? ' tutorial-glow' : '')} type="button" disabled={busy || !isDrawingDiscard}
               aria-label={'Take ' + cardName(state.topDiscard) + ' from the discard pile'}
               onClick={() => dispatch({ type: 'draw', source: 'discard' })}>
@@ -209,17 +217,32 @@ export default function TutorialGame() {
             {target === 'your-run' && <span className="tutorial-meld-hint"><ArrowRight size={14}/>Tap to extend your run</span>}
           </button>
           <div className="tutorial-section-title tutorial-hand-title"><strong>YOUR HAND</strong><small>{state.hand.length} cards · Tap to select</small></div>
+          {canSelect && !busy && !openingReady && <div className="tutorial-hand-pointer"><ArrowDown size={15}/>Tap the golden cards{state.phase === 'opening' ? ' to make a run.' : '.'}</div>}
           <div className="tutorial-hand" data-eleven={state.hand.length === 11 ? 'true' : 'false'} aria-label="Your practice cards">
-            {state.hand.map(item => <button type="button" key={item.id} disabled={busy || !canSelect}
+            {visibleHand.map(item => <button type="button" key={item.id} disabled={busy || !canSelect}
               className={'tutorial-hand-card' + (state.selected.includes(item.id) ? ' selected' : '') + (expectedIds.includes(item.id) ? ' suggested' : '')}
               aria-label={cardName(item) + (expectedIds.includes(item.id) ? ', suggested card' : '')}
               aria-pressed={state.selected.includes(item.id)}
               onClick={() => dispatch({ type: 'select', id: item.id })}><PracticeCard card={item}/></button>)}
           </div>
           <div className="tutorial-controls">
-            <span className="tutorial-control-note">{state.phase === 'opening' ? state.selected.length + ' of 5 cards selected' : state.phase === 'layoff' ? state.laidOffCount + ' of ' + TUTORIAL_LAYOFF_IDS.length + ' cards added' : state.selected.length ? 'Card selected' : 'Follow the golden highlight'}</span>
-            <button type="button" className="button gold" disabled={busy || !tutorialOpeningReady(state)} onClick={() => dispatch({ type: 'go-down' })}><Check size={17}/>Go Down</button>
-            <button type="button" className="button outline" disabled={busy || !discardReady} onClick={() => dispatch({ type: 'discard' })}>Discard<ArrowRight size={17}/></button>
+            <span className="tutorial-control-note">{state.phase === 'opening'
+              ? state.selected.length + ' of 5 cards picked'
+              : state.phase === 'layoff' ? state.laidOffCount + ' of ' + TUTORIAL_LAYOFF_IDS.length + ' cards added'
+              : state.selected.length ? 'Card selected' : state.phase === 'sort' || state.phase === 'sort-mode' ? 'Let’s tidy up first' : 'Follow the golden glow'}</span>
+            <div className="tutorial-action-spot">
+              {openingReady && <span className="tutorial-coach tutorial-action-coach">Now tap Go Down <ArrowDown size={13}/></span>}
+              <button type="button" className={'button gold' + (openingReady ? ' tutorial-glow' : '')} disabled={busy || !openingReady} onClick={() => dispatch({ type: 'go-down' })}><Check size={17}/>Go Down</button>
+            </div>
+            <div className="tutorial-action-spot">
+              {discardReady && <span className="tutorial-coach tutorial-action-coach">Now Discard <ArrowDown size={13}/></span>}
+              <button type="button" className={'button outline' + (discardReady ? ' tutorial-glow' : '')} disabled={busy || !discardReady} onClick={() => dispatch({ type: 'discard' })}>Discard<ArrowRight size={17}/></button>
+            </div>
+            <div className={'tutorial-sort-spot' + (state.phase === 'sort' || state.phase === 'sort-mode' ? ' tutorial-glow' : '')}>
+              {state.phase === 'sort' && <span className="tutorial-coach tutorial-action-coach">Tap Sort <ArrowDown size={13}/></span>}
+              {state.phase === 'sort-mode' && <span className="tutorial-coach tutorial-action-coach">Hold Sort <ArrowDown size={13}/></span>}
+              <SortControl mode={sortMode} direction={direction} onSort={sortHand} onModeChange={changeMode}/>
+            </div>
           </div>
         </div>
       </section>
@@ -243,16 +266,14 @@ export default function TutorialGame() {
           </div>
         </> : <>
           <span className="tutorial-lesson-suit" aria-hidden="true">♠</span>
-          <h2 id="tutorial-lesson-title">{lesson === 'intro' ? 'Learn Parkes Rummy by winning' : milestoneCopy[lesson]?.heading}</h2>
-          <p id="tutorial-lesson-description">{lesson === 'intro'
-            ? 'Play through one guaranteed winning hand against a scripted AI. Learn drawing, discarding, wild cards, going down, adding to other players and scoring. Wrong moves never end the lesson.'
-            : milestoneCopy[lesson]?.text}</p>
+          <h2 id="tutorial-lesson-title">{milestoneCopy[lesson]?.heading}</h2>
+          <p id="tutorial-lesson-description">{milestoneCopy[lesson]?.text}</p>
           <div className="tutorial-lesson-actions">
-            {lesson !== 'intro' && <button type="button" className="text-link" onClick={() => setLesson(null)}><X size={14}/>Close</button>}
-            <button type="button" id="tutorial-lesson-action" className="button gold" onClick={continueLesson}>{lesson === 'intro' ? 'Start winning hand' : 'Got it, continue'}<ArrowRight size={18}/></button>
+            <button type="button" id="tutorial-lesson-action" className="button gold" onClick={continueLesson}>Got it, let’s go<ArrowRight size={18}/></button>
           </div>
         </>}
       </div>
     </div>}
+    {settingsOpen && <TutorialSettings direction={direction} onDirection={changeDirection} muted={muted} onSound={changeSound} onDone={closeSettings}/>}
   </div>;
 }
