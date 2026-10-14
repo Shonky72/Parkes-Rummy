@@ -48,8 +48,8 @@ export const PLAYER_SYMBOLS = {
 
 export type FontId = keyof typeof FONT_STYLES;
 export type SymbolId = keyof typeof PLAYER_SYMBOLS;
-export type StoreProductKey = 'remove_ads' | 'fonts_pack' | 'symbols_pack' | 'voice_access' | 'everything_pack';
-export type EntitlementKey = 'remove_ads' | 'premium_fonts' | 'premium_symbols' | 'voice_chat';
+export type StoreProductKey = 'remove_ads' | 'fonts_pack' | 'symbols_pack' | 'voice_access' | 'original_rules' | 'everything_pack';
+export type EntitlementKey = 'remove_ads' | 'premium_fonts' | 'premium_symbols' | 'voice_chat' | 'original_rules';
 export interface PlayerProfile { font: FontId; symbol: SymbolId }
 
 export const STORE_PRODUCTS: Readonly<Record<StoreProductKey, { label: string; amount: number; env: string; grants: readonly EntitlementKey[]; description: string }>> = {
@@ -57,7 +57,8 @@ export const STORE_PRODUCTS: Readonly<Record<StoreProductKey, { label: string; a
   fonts_pack: { label: 'Fonts Pack', amount: 199, env: 'STRIPE_FONTS_PRICE_ID', grants: ['premium_fonts'], description: 'Unlock all premium player-name styles.' },
   symbols_pack: { label: 'Symbols Pack', amount: 199, env: 'STRIPE_SYMBOLS_PRICE_ID', grants: ['premium_symbols'], description: 'Unlock the full player-symbol collection.' },
   voice_access: { label: 'Voice Chat', amount: 299, env: 'STRIPE_VOICE_PRICE_ID', grants: ['voice_chat'], description: 'Unlock table voice chat for this account.' },
-  everything_pack: { label: 'Everything Pack', amount: 599, env: 'STRIPE_ALL_IN_ONE_PRICE_ID', grants: ['remove_ads','premium_fonts','premium_symbols','voice_chat'], description: 'Remove Ads, all fonts, all symbols and Voice Chat.' },
+  original_rules: { label: 'Original Rules', amount: 99, env: 'STRIPE_ORIGINAL_RULES_PRICE_ID', grants: ['original_rules'], description: 'Host the original ten Parkes house rules. Friends you invite can join without owning them.' },
+  everything_pack: { label: 'Everything Pack', amount: 599, env: 'STRIPE_ALL_IN_ONE_PRICE_ID', grants: ['remove_ads','premium_fonts','premium_symbols','voice_chat','original_rules'], description: 'Remove Ads, all fonts, all symbols, Voice Chat and Original Rules.' },
 };
 
 
@@ -66,6 +67,7 @@ export const DEFAULT_LIVE_PRICE_IDS: Readonly<Record<StoreProductKey,string>> = 
   fonts_pack: 'price_1UPMOxFkx7dvBVlWPQpxb21c',
   symbols_pack: 'price_1UPMOzFkx7dvBVlWhbqWjYqy',
   voice_access: 'price_1UPMP2Fkx7dvBVlW684l2IBD',
+  original_rules: 'price_1UQOjeFkx7dvBVlW7Y7jH1AK',
   everything_pack: 'price_1UPMP4Fkx7dvBVlWAWwLmICZ',
 };
 export const FONT_IDS = Object.keys(FONT_STYLES) as FontId[];

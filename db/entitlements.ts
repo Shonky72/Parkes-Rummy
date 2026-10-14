@@ -5,6 +5,7 @@ export const REMOVE_ADS_ENTITLEMENT: EntitlementKey = 'remove_ads';
 export const PREMIUM_FONTS_ENTITLEMENT: EntitlementKey = 'premium_fonts';
 export const PREMIUM_SYMBOLS_ENTITLEMENT: EntitlementKey = 'premium_symbols';
 export const VOICE_CHAT_ENTITLEMENT: EntitlementKey = 'voice_chat';
+export const ORIGINAL_RULES_ENTITLEMENT: EntitlementKey = 'original_rules';
 
 let schemaReady: Promise<void> | null = null;
 export function ensureStoreSchema() {
@@ -21,7 +22,7 @@ export function ensureStoreSchema() {
     await database.query('CREATE INDEX IF NOT EXISTS purchase_receipts_payment_intent_idx ON purchase_receipts(payment_intent)');
     await database.query(`CREATE TABLE IF NOT EXISTS payment_events (
       event_id text PRIMARY KEY, event_type text NOT NULL, created_at timestamptz NOT NULL DEFAULT now())`);
-    await database.query(`CREATE TABLE IF NOT EXISTS player_profiles (
+    await database.query(`CREATE TABLE IF NOT EXISTS premium_access_grants (\n      email text PRIMARY KEY, note text NOT NULL DEFAULT '', granted_at timestamptz NOT NULL DEFAULT now(), granted_by text NOT NULL)`);\n    await database.query(`CREATE TABLE IF NOT EXISTS player_profiles (
       user_id text PRIMARY KEY REFERENCES "user"("id") ON DELETE CASCADE,
       font_id text NOT NULL DEFAULT 'default', symbol_id text NOT NULL DEFAULT 'initials', updated_at timestamptz NOT NULL DEFAULT now())`);
     await database.query(`CREATE TABLE IF NOT EXISTS voice_presence (
@@ -45,10 +46,11 @@ export interface EntitlementSnapshot {
   premiumFonts: boolean;
   premiumSymbols: boolean;
   voiceChat: boolean;
+  originalRules: boolean;
 }
 
-const EMPTY_ENTITLEMENTS: EntitlementSnapshot = { removeAds: false, premiumFonts: false, premiumSymbols: false, voiceChat: false };
-const allEntitlements: EntitlementKey[] = ['remove_ads','premium_fonts','premium_symbols','voice_chat'];
+const EMPTY_ENTITLEMENTS: EntitlementSnapshot = { removeAds: false, premiumFonts: false, premiumSymbols: false, voiceChat: false, originalRules: false };
+const allEntitlements: EntitlementKey[] = ['remove_ads','premium_fonts','premium_symbols','voice_chat','original_rules'];
 
 function snapshotFromKeys(keys: ReadonlySet<string>): EntitlementSnapshot {
   return {
@@ -56,23 +58,81 @@ function snapshotFromKeys(keys: ReadonlySet<string>): EntitlementSnapshot {
     premiumFonts: keys.has(PREMIUM_FONTS_ENTITLEMENT),
     premiumSymbols: keys.has(PREMIUM_SYMBOLS_ENTITLEMENT),
     voiceChat: keys.has(VOICE_CHAT_ENTITLEMENT),
+    originalRules: keys.has(ORIGINAL_RULES_ENTITLEMENT),
   };
 }
 
-export async function hasEntitlement(userId: string, entitlement: EntitlementKey) {
-  await ensureStoreSchema();
-  const result = await database.query<{ exists: boolean }>(
-    'SELECT EXISTS (SELECT 1 FROM user_entitlements WHERE user_id = $1 AND entitlement = $2) AS exists',
-    [userId, entitlement],
+function normalizeAccessEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
+export function isFullAccessAdmin(email: string) {
+  const configured = (process.env.PARKES_ADMIN_EMAILS?.trim() || 'dan@ibdcollective.net')
+    .split(',').map(normalizeAccessEmail).filter(Boolean);
+  return configured.includes(normalizeAccessEmail(email));
+}
+
+async function fullAccessGranted(userId: string) {
+  const result = await database.query<{ granted: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM "user" u
+       JOIN premium_access_grants g ON g.email = lower(u.email)
+       WHERE u.id = $1
+     ) AS granted`,
+    [userId],
   );
-  return Boolean(result.rows[0]?.exists);
+  return Boolean(result.rows[0]?.granted);
+}
+
+export async function hasEntitlement(userId: string, entitlement: EntitlementKey) {
+  const snapshot = await getEntitlements(userId);
+  const lookup: Record<EntitlementKey, boolean> = {
+    remove_ads: snapshot.removeAds,
+    premium_fonts: snapshot.premiumFonts,
+    premium_symbols: snapshot.premiumSymbols,
+    voice_chat: snapshot.voiceChat,
+    original_rules: snapshot.originalRules,
+  };
+  return lookup[entitlement];
 }
 
 export async function getEntitlements(userId: string): Promise<EntitlementSnapshot> {
   await ensureStoreSchema();
   if (!userId) return EMPTY_ENTITLEMENTS;
+  if (await fullAccessGranted(userId)) return { removeAds:true, premiumFonts:true, premiumSymbols:true, voiceChat:true, originalRules:true };
   const result = await database.query<{ entitlement: string }>('SELECT entitlement FROM user_entitlements WHERE user_id = $1', [userId]);
   return snapshotFromKeys(new Set(result.rows.map(row => row.entitlement)));
+}
+
+export interface FullAccessGrant { email: string; note: string; grantedAt: string; grantedBy: string }
+
+export async function listFullAccessGrants(): Promise<FullAccessGrant[]> {
+  await ensureStoreSchema();
+  const result = await database.query<{ email:string; note:string; granted_at:Date|string; granted_by:string }>(
+    'SELECT email,note,granted_at,granted_by FROM premium_access_grants ORDER BY granted_at DESC, email ASC',
+  );
+  return result.rows.map(row => ({ email:row.email, note:row.note, grantedAt:new Date(row.granted_at).toISOString(), grantedBy:row.granted_by }));
+}
+
+export async function grantFullAccessEmail(email: string, note: string, grantedBy: string) {
+  await ensureStoreSchema();
+  const normalized = normalizeAccessEmail(email);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) || normalized.length > 254) throw new Error('INVALID_EMAIL');
+  const cleanNote = note.trim().slice(0,120);
+  await database.query(
+    `INSERT INTO premium_access_grants (email,note,granted_by)
+     VALUES ($1,$2,$3)
+     ON CONFLICT (email) DO UPDATE SET note=EXCLUDED.note, granted_at=now(), granted_by=EXCLUDED.granted_by`,
+    [normalized, cleanNote, normalizeAccessEmail(grantedBy)],
+  );
+  return normalized;
+}
+
+export async function revokeFullAccessEmail(email: string) {
+  await ensureStoreSchema();
+  const normalized = normalizeAccessEmail(email);
+  await database.query('DELETE FROM premium_access_grants WHERE email=$1', [normalized]);
+  return normalized;
 }
 
 export async function getPlayerProfile(userId: string): Promise<PlayerProfile> {

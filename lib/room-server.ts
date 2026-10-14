@@ -1,6 +1,6 @@
 import { PostgresRoomRepository, type RoomRecord, type RoomRepository } from '../db/room-repository';
 import { DatabaseUnavailableError } from '../db';
-import { getEntitlements, getPlayerProfile } from '../db/entitlements';
+import { getEntitlements, getPlayerProfile, isFullAccessAdmin } from '../db/entitlements';
 import { resolveAccountUser } from './auth';
 import { readAuthConfig, accountMarker, ACCOUNT_IDENTITY_HEADER, type AccountUser } from './auth-config';
 import { applyAction, createPlayer, createRoom, lastMoveAtFor, publicRoom, roomPreview, ruleNumberFor } from './rummy';
@@ -354,8 +354,8 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
     accountSessionRequest: (request: Request) => handle(async () => {
       if (request.headers.get('Sec-Fetch-Site') === 'cross-site') throw new ApiError('Open this game directly to continue.', 403);
       const user = await resolveSession(request);
-      const [entitlements, profile] = user ? await Promise.all([getEntitlements(user.id), getPlayerProfile(user.id)]) : [ { removeAds:false, premiumFonts:false, premiumSymbols:false, voiceChat:false }, { font:'default', symbol:'initials' } ];
-      return reply({ configured: configured(), user, entitlements, profile });
+      const [entitlements, profile] = user ? await Promise.all([getEntitlements(user.id), getPlayerProfile(user.id)]) : [ { removeAds:false, premiumFonts:false, premiumSymbols:false, voiceChat:false, originalRules:false }, { font:'default', symbol:'initials' } ];
+      return reply({ configured: configured(), user, entitlements, accessAdmin: Boolean(user && isFullAccessAdmin(user.email)), profile });
     }),
     accountConfigRequest: () => reply({ enabled: configured() }),
     accountGamesRequest: (request: Request) => handle(async () => {

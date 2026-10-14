@@ -10,11 +10,12 @@ export interface AccountSnapshot {
   epoch: number;
   operation: '' | 'signin' | 'signout';
   error: string;
-  entitlements: { removeAds: boolean; premiumFonts: boolean; premiumSymbols: boolean; voiceChat: boolean };
+  entitlements: { removeAds: boolean; premiumFonts: boolean; premiumSymbols: boolean; voiceChat: boolean; originalRules: boolean };
+  accessAdmin: boolean;
   profile: { font: string; symbol: string };
 }
 
-const initialSnapshot: AccountSnapshot = { status: 'checking', configured: false, user: null, epoch: 0, operation: '', error: '', entitlements: { removeAds: false, premiumFonts: false, premiumSymbols: false, voiceChat: false }, profile: { font: 'default', symbol: 'initials' } };
+const initialSnapshot: AccountSnapshot = { status: 'checking', configured: false, user: null, epoch: 0, operation: '', error: '', entitlements: { removeAds: false, premiumFonts: false, premiumSymbols: false, voiceChat: false, originalRules: false }, accessAdmin: false, profile: { font: 'default', symbol: 'initials' } };
 let snapshot = initialSnapshot;
 const listeners = new Set<() => void>();
 let generation = 0;
@@ -83,7 +84,7 @@ export async function refreshAccount(options: { suspend?: boolean; manual?: bool
     try {
       const response = await fetch('/api/account/session', { credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
       if (!response.ok) throw new Error('Your account could not be checked.');
-      const data = await response.json() as { configured: boolean; user: AccountUser | null; entitlements?: { removeAds?: boolean; premiumFonts?: boolean; premiumSymbols?: boolean; voiceChat?: boolean }; profile?: { font?: string; symbol?: string } };
+      const data = await response.json() as { configured: boolean; user: AccountUser | null; entitlements?: { removeAds?: boolean; premiumFonts?: boolean; premiumSymbols?: boolean; voiceChat?: boolean; originalRules?: boolean }; accessAdmin?: boolean; profile?: { font?: string; symbol?: string } };
       if (expectedGeneration !== generation || controller.signal.aborted) return;
       if (typeof data.configured !== 'boolean' || (data.user !== null && (!data.user || typeof data.user.id !== 'string' || !data.user.id))) throw new Error('Your account could not be checked.');
       if (options.requireSignedOut && data.user) {
@@ -95,7 +96,7 @@ export async function refreshAccount(options: { suspend?: boolean; manual?: bool
       const announce = accountChanged && (lastResolvedAccountId !== undefined || user !== null);
       lastResolvedAccountId = user?.id ?? null;
       const identity = setClientIdentity(user?.id ?? null);
-      publish({ status: 'ready', configured: data.configured, user, epoch: identity.epoch, operation: '', error: '', entitlements: { removeAds: Boolean(data.entitlements?.removeAds), premiumFonts: Boolean(data.entitlements?.premiumFonts), premiumSymbols: Boolean(data.entitlements?.premiumSymbols), voiceChat: Boolean(data.entitlements?.voiceChat) }, profile: { font: data.profile?.font || 'default', symbol: data.profile?.symbol || 'initials' } });
+      publish({ status: 'ready', configured: data.configured, user, epoch: identity.epoch, operation: '', error: '', entitlements: { removeAds: Boolean(data.entitlements?.removeAds), premiumFonts: Boolean(data.entitlements?.premiumFonts), premiumSymbols: Boolean(data.entitlements?.premiumSymbols), voiceChat: Boolean(data.entitlements?.voiceChat), originalRules: Boolean(data.entitlements?.originalRules) }, accessAdmin: Boolean(data.accessAdmin), profile: { font: data.profile?.font || 'default', symbol: data.profile?.symbol || 'initials' } });
       if (announce) announceAccountChange();
     } catch {
       if (expectedGeneration !== generation) return;

@@ -1,0 +1,9 @@
+import { resolveAccountUser } from '@/lib/auth';
+import { grantFullAccessEmail, isFullAccessAdmin, listFullAccessGrants, revokeFullAccessEmail } from '@/db/entitlements';
+export const dynamic='force-dynamic';
+export const runtime='nodejs';
+function sameOrigin(request:Request){return request.headers.get('Origin')===new URL(request.url).origin&&request.headers.get('Sec-Fetch-Site')!=='cross-site';}
+async function admin(request:Request){const user=await resolveAccountUser(request);return user&&isFullAccessAdmin(user.email)?user:null;}
+export async function GET(request:Request){const user=await admin(request);if(!user)return Response.json({error:'Owner access required.'},{status:403});return Response.json({grants:await listFullAccessGrants()},{headers:{'Cache-Control':'no-store'}});}
+export async function POST(request:Request){if(!sameOrigin(request))return Response.json({error:'Open Parkes Rummy directly to continue.'},{status:403});const user=await admin(request);if(!user)return Response.json({error:'Owner access required.'},{status:403});const body=await request.json().catch(()=>({})) as {email?:string;note?:string};try{const email=await grantFullAccessEmail(body.email||'',body.note||'',user.email);return Response.json({ok:true,email});}catch{return Response.json({error:'Enter a valid Google-account email.'},{status:400});}}
+export async function DELETE(request:Request){if(!sameOrigin(request))return Response.json({error:'Open Parkes Rummy directly to continue.'},{status:403});const user=await admin(request);if(!user)return Response.json({error:'Owner access required.'},{status:403});const body=await request.json().catch(()=>({})) as {email?:string};if(!body.email)return Response.json({error:'Choose an account to remove.'},{status:400});await revokeFullAccessEmail(body.email);return Response.json({ok:true});}

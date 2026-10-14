@@ -1,10 +1,11 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Crown, MessageCircle, Palette, ShieldCheck, Sparkles, Star } from 'lucide-react';
+import { BookOpen, Check, Crown, MessageCircle, Palette, ShieldCheck, Sparkles, Star } from 'lucide-react';
 import type { AccountSnapshot } from '../../lib/account-client';
 import { refreshAccount, signInWithGoogle } from '../../lib/account-client';
 import { startStoreCheckout } from '../../lib/billing-client';
 import { FONT_STYLES, PLAYER_SYMBOLS, STORE_PRODUCTS, type FontId, type PlayerProfile, type StoreProductKey, type SymbolId, fontCssUrl } from '../../lib/store-catalog';
+import FullAccessAdmin from './FullAccessAdmin';
 
 interface CatalogResponse {
   signedIn: boolean;
@@ -12,13 +13,14 @@ interface CatalogResponse {
   profile: PlayerProfile;
   items: Array<{ key: StoreProductKey; label: string; amount: number; description: string; configured: boolean }>;
 }
-const productIcon: Record<StoreProductKey, typeof Star> = { remove_ads:ShieldCheck, fonts_pack:Palette, symbols_pack:Star, voice_access:MessageCircle, everything_pack:Crown };
+const productIcon: Record<StoreProductKey, typeof Star> = { remove_ads:ShieldCheck, fonts_pack:Palette, symbols_pack:Star, voice_access:MessageCircle, original_rules:BookOpen, everything_pack:Crown };
 function owns(product: StoreProductKey, e: AccountSnapshot['entitlements']) {
   if (product === 'remove_ads') return e.removeAds;
   if (product === 'fonts_pack') return e.premiumFonts;
   if (product === 'symbols_pack') return e.premiumSymbols;
   if (product === 'voice_access') return e.voiceChat;
-  return e.removeAds && e.premiumFonts && e.premiumSymbols && e.voiceChat;
+  if (product === 'original_rules') return e.originalRules;
+  return e.removeAds && e.premiumFonts && e.premiumSymbols && e.voiceChat && e.originalRules;
 }
 export default function StorePanel({ account, onChanged }: { account: AccountSnapshot; onChanged?: () => void }) {
   const [catalog,setCatalog]=useState<CatalogResponse|null>(null), [busy,setBusy]=useState(''), [error,setError]=useState('');
@@ -57,6 +59,7 @@ export default function StorePanel({ account, onChanged }: { account: AccountSna
       <div className="style-actions"><button type="button" className="text-link" disabled={fontsLoaded} onClick={()=>{const link=document.createElement('link');link.rel='stylesheet';link.href=fontCssUrl();link.referrerPolicy='no-referrer';document.head.append(link);setFontsLoaded(true);}}>Load actual font previews</button><button type="button" className="button gold small" disabled={busy!==''||!premiumFontAllowed||!premiumSymbolAllowed} onClick={()=>void equip()}>{busy==='profile'?'Saving…':'Apply owned style'}</button></div>
     </div></div>
     {!account.user&&<p className="store-signin-note">Sign in only when you want purchases or games to follow you between devices.</p>}
+    {account.accessAdmin&&<FullAccessAdmin/>}
     {error&&<p className="store-error" role="alert">{error}</p>}
   </section>;
 }
