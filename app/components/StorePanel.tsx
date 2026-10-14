@@ -48,18 +48,18 @@ export default function StorePanel({ account, onChanged }: { account: AccountSna
   const premiumSymbolAllowed = profile.symbol==='initials'||account.entitlements.premiumSymbols;
   const previewStyle = useMemo(()=>({fontFamily:FONT_STYLES[profile.font]?.stack??FONT_STYLES.default.stack}),[profile.font]);
   return <section className="store-panel">
-    <div className="store-heading"><div><span className="store-kicker"><Sparkles size={16}/>Optional extras</span><h3>Parkes Rummy Store</h3><p>One-off purchases. No subscriptions. Game rules and card odds stay the same.</p></div>{account.user&&<span className="store-account">Purchases follow {account.user.name} across devices.</span>}</div>
+    <div className="store-heading"><div><span className="store-kicker"><Sparkles size={16}/>Optional extras</span><h3>Parkes Rummy Store</h3><p>One-off purchases. No subscriptions. No subscriptions or recurring charges.</p></div>{account.user&&<span className="store-account">Purchases follow {account.user.name} across devices.</span>}</div>
     <div className="store-items">{items.map(item=>{const Icon=productIcon[item.key];const owned=owns(item.key,account.entitlements);return <article key={item.key} className={`store-card ${item.key==='everything_pack'?'store-featured':''}`}>
       {item.key==='everything_pack'&&<span className="best-value">BEST VALUE</span>}<Icon size={25}/><h4>{item.label}</h4><p>{item.description}</p><strong>A${(item.amount/100).toFixed(2)}</strong><small>One-off · permanent</small>
       <button type="button" className={`button ${item.key==='everything_pack'?'gold':'outline'} small`} disabled={owned||busy!==''||!item.configured} onClick={()=>void purchase(item.key)}>{owned?<><Check size={16}/>Owned</>:busy===item.key?'Opening…':!item.configured?'Setting up':account.user?'Buy':'Sign in to buy'}</button>
     </article>;})}</div>
-    <div className="style-shop panel"><div className="style-preview"><span aria-hidden="true">{PLAYER_SYMBOLS[profile.symbol]?.symbol || (account.user?.name||'P').slice(0,1).toUpperCase()}</span><strong style={previewStyle}>{account.user?.name||'Your name'}</strong></div><div className="style-controls">
+    <details className="store-details"><summary><span>Personalise your player style</span><small>Font and symbol settings</small></summary><div className="style-shop panel"><div className="style-preview"><span aria-hidden="true">{PLAYER_SYMBOLS[profile.symbol]?.symbol || (account.user?.name||'P').slice(0,1).toUpperCase()}</span><strong style={previewStyle}>{account.user?.name||'Your name'}</strong></div><div className="style-controls">
       <div><label htmlFor="store-font">Player name font</label><select id="store-font" value={profile.font} onChange={e=>setProfile(old=>({...old,font:e.target.value as FontId}))}>{Object.entries(FONT_STYLES).map(([id,font])=><option value={id} key={id}>{font.label}{id!=='default'&&!account.entitlements.premiumFonts?' · preview':''}</option>)}</select></div>
       <div><label htmlFor="store-symbol">Player symbol</label><select id="store-symbol" value={profile.symbol} onChange={e=>setProfile(old=>({...old,symbol:e.target.value as SymbolId}))}>{Object.entries(PLAYER_SYMBOLS).map(([id,item])=><option value={id} key={id}>{item.symbol?`${item.symbol} `:''}{item.label}{id!=='initials'&&!account.entitlements.premiumSymbols?' · preview':''}</option>)}</select></div>
       <div className="style-actions"><button type="button" className="text-link" disabled={fontsLoaded} onClick={()=>{const link=document.createElement('link');link.rel='stylesheet';link.href=fontCssUrl();link.referrerPolicy='no-referrer';document.head.append(link);setFontsLoaded(true);}}>Load actual font previews</button><button type="button" className="button gold small" disabled={busy!==''||!premiumFontAllowed||!premiumSymbolAllowed} onClick={()=>void equip()}>{busy==='profile'?'Saving…':'Apply owned style'}</button></div>
-    </div></div>
+    </div></div></details>
     {!account.user&&<p className="store-signin-note">Sign in only when you want purchases or games to follow you between devices.</p>}
-    {account.accessAdmin&&<FullAccessAdmin/>}
+    {account.accessAdmin&&<details className="store-details store-admin-details"><summary><span>Give friends full access</span><small>Owner tools</small></summary><FullAccessAdmin/></details>}
     {error&&<p className="store-error" role="alert">{error}</p>}
   </section>;
 }
