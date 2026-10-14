@@ -20,8 +20,10 @@ test('rigged practice hand enforces the real draw/discard/opening sequence and e
   state = reduceTutorial(state, { type: 'discard' });
   assert.equal(state.phase, 'second-draw');
   assert.equal(state.hand.length, 10);
+  assert.equal(state.topDiscard.id, '9S');
 
   state = reduceTutorial(state, { type: 'draw', source: 'discard' });
+  assert.equal(state.topDiscard.id, '12D');
   assert.equal(state.phase, 'opening');
   assert.equal(reduceTutorial(state, { type: 'go-down' }).phase, 'opening');
   for (const id of TUTORIAL_OPENING_IDS) state = reduceTutorial(state, { type: 'select', id });
