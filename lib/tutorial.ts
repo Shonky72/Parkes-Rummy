@@ -37,11 +37,12 @@ const thirdDraw = card('14H', 14, 'H');
 const startingDiscard = card('13C', 13, 'C');
 
 export type TutorialPhase =
-  'intro' | 'first-draw' | 'first-discard' | 'second-draw' | 'opening' |
+  'sort' | 'sort-mode' | 'settings' | 'first-draw' | 'first-discard' | 'second-draw' | 'opening' |
   'second-discard' | 'third-draw' | 'layoff' | 'final-discard' | 'won';
 export type TutorialTarget = 'your-run' | 'opponent-run';
 export type TutorialAction =
-  | { type: 'start' | 'restart' }
+  | { type: 'restart' | 'sort' | 'settings-done' }
+  | { type: 'sort-mode'; mode: 'number' | 'colour' | 'suit' }
   | { type: 'draw'; source: 'stock' | 'discard' }
   | { type: 'select'; id: string }
   | { type: 'go-down' }
@@ -61,7 +62,7 @@ export interface TutorialState {
 
 export function initialTutorialState(): TutorialState {
   return {
-    phase: 'intro', hand: [...TUTORIAL_INITIAL_HAND], selected: [],
+    phase: 'sort', hand: [...TUTORIAL_INITIAL_HAND], selected: [],
     yourRun: [], opponentRun: [], topDiscard: startingDiscard,
     laidOffCount: 0, turn: 1,
   };
@@ -100,8 +101,14 @@ export function tutorialExpectedCardIds(state: TutorialState): readonly string[]
 export function reduceTutorial(state: TutorialState, action: TutorialAction): TutorialState {
   if (action.type === 'restart') return initialTutorialState();
 
-  if (action.type === 'start') {
-    return state.phase === 'intro' ? { ...state, phase: 'first-draw' } : state;
+  if (action.type === 'sort') {
+    return state.phase === 'sort' ? { ...state, phase: 'sort-mode' } : state;
+  }
+  if (action.type === 'sort-mode') {
+    return state.phase === 'sort-mode' && action.mode !== 'number' ? { ...state, phase: 'settings' } : state;
+  }
+  if (action.type === 'settings-done') {
+    return state.phase === 'settings' ? { ...state, phase: 'first-draw' } : state;
   }
 
   if (action.type === 'draw') {
