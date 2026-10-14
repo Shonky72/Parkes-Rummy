@@ -205,3 +205,22 @@
 .tutorial-settings-host strong{font-size:12px;color:#f1d18d}
 .tutorial-settings-host p{font-size:11px;line-height:1.5;color:#bdd1c3;margin-top:5px}
 .tutorial-settings>.button{width:100%;margin-top:16px;min-height:45px}
+
+
+.tutorial-mobile-step{display:none}
+@media(max-width:980px){
+  .tutorial-mobile-step{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    position:sticky;top:0;z-index:8;
+    padding:9px 12px;border:1px solid #f0c66a88;border-radius:10px;
+    background:#103d2f;box-shadow:0 6px 16px #0005;
+    color:#ffe1a2;font-size:11px;line-height:1.35
+  }
+  .tutorial-mobile-step strong{font-size:12px}
+  .tutorial-mobile-step>span{color:#f7d68b;text-align:right;max-width:50%}
+}
+@media(max-width:600px){
+  .tutorial-mobile-step{padding:8px 9px}
+  .tutorial-mobile-step strong{font-size:11px}
+  .tutorial-mobile-step>span{font-size:10px}
+}
