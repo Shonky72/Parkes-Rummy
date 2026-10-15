@@ -15,11 +15,10 @@ let browser, currentPage;
 const results = [];
 const user = { id: 'footer-ui-player', name: 'Dan Schonberg', email: 'footer@example.test', image: null };
 function account(signed) { return { configured: true, user: signed ? user : null, entitlements: { removeAds: signed, premiumFonts: false, premiumSymbols: false, voiceChat: false, originalRules: false }, profile: { font: 'default', symbol: 'initials' }, accessAdmin: false }; }
-
 const fixedSelectors = ['.home-header', '.home-hero', '.hero-title', '.hero-card-fan', '.start-panel', '.start-panel > h2', '.account-controls', '.home-play-tabs', '.home-information-footer', '.home-information-footer .developer-wordmark', '.home-information-footer .site-links'];
 async function geometry(page) {
   return page.evaluate(selectors => Object.fromEntries(selectors.map(selector => {
-    const el = document.querySelector(selector), box = el.getBoundingClientRect();
+    const box = document.querySelector(selector).getBoundingClientRect();
     return [selector, { x: box.x + scrollX, y: box.y + scrollY, width: box.width, height: box.height }];
   })), fixedSelectors);
 }
@@ -28,7 +27,6 @@ function sameShell(before, after, label) {
     assert.ok(Math.abs(before[selector][key] - after[selector][key]) <= 1, `${label}: ${selector} ${key} moved: ${before[selector][key]} to ${after[selector][key]}`);
   }
 }
-
 try {
   let ready = false;
   for (let n = 0; n < 90; n++) { try { ready = (await fetch(base)).ok; } catch {} if (ready) break; await pause(1000); }
@@ -72,6 +70,7 @@ try {
       const content = document.querySelector('.start-panel > .home-tab-content');
       const input = box('.code-entry-form .code-input'), join = box('.join-button');
       const nameLabel = box('label[for=home-name]'), nameInput = box('.name-input');
+      const quick = box('.quick-play-button');
       return { footerBottom: box('.home-information-footer').bottom, footerTop: box('.home-information-footer').top,
         panelBottom: box('.start-panel').bottom, scrollY, overflow: document.documentElement.scrollWidth > innerWidth + 1,
         logoWidth: box('.home-information-footer .developer-wordmark').width,
@@ -83,6 +82,7 @@ try {
         nameStacked: nameLabel.bottom <= nameInput.top + 1,
         joinStacked: input.bottom <= join.top + 1 && Math.abs(input.width - join.width) < 1,
         contentHeight: content.clientHeight, contentScrollHeight: content.scrollHeight,
+        quickVisible: quick.top >= content.getBoundingClientRect().top && quick.bottom <= Math.min(content.getBoundingClientRect().bottom, innerHeight),
         headerFont: parseFloat(getComputedStyle(document.querySelector('.start-panel > h2')).fontSize),
         buttonFont: parseFloat(getComputedStyle(document.querySelector('.create-button')).fontSize),
         visibleCredits: [...document.querySelectorAll('.developer-credit')].filter(e => e.getBoundingClientRect().height > 0).length,
@@ -99,8 +99,12 @@ try {
     assert.ok(info.footerTop >= info.panelBottom, 'Footer does not overlay the play panel');
     if (item.width > 850) {
       assert.ok(info.headerFont >= 36 && info.buttonFont >= 22, 'Do not shrink original text to fit a redesign');
-      assert.ok(info.footerBottom <= item.height + 1, `${item.name}: footer below viewport ${info.footerBottom}`);
-      assert.ok(info.footerBottom >= item.height - 35, 'Use the full vertical screen instead of packing everything at the top');
+      assert.equal(info.quickVisible, true, `${item.name}: primary play actions must not be squeezed out of view`);
+      // The user rejected squeezing/reformatting for tiny-height laptop screens.
+      if (item.height >= 900) {
+        assert.ok(info.footerBottom <= item.height + 1, `${item.name}: footer below viewport ${info.footerBottom}`);
+        assert.ok(info.footerBottom >= item.height - 35, 'Fill vertical screen space instead of packing at the top');
+      }
       assert.equal(info.scrollY, 0);
     }
     await page.screenshot({ path: `${output}/${item.name}.png` });
@@ -112,7 +116,6 @@ try {
       if (item.width > 850) assert.equal(await page.evaluate(() => scrollY), 0, 'Desktop must not jump during tab selection');
       if (item.name === 'desktop-screenshot') await page.screenshot({ path: `${output}/desktop-${tab.replace(/ /g, '-').toLowerCase()}.png` });
     }
-    // Prove overflowing content scrolls ONLY inside the right-hand tab viewport.
     const beforeScroll = await geometry(page);
     const scrollY = await page.evaluate(() => window.scrollY);
     await page.locator('.home-tab-content').evaluate(el => {
@@ -124,7 +127,6 @@ try {
     assert.equal(await page.evaluate(() => window.scrollY), scrollY);
     sameShell(beforeScroll, await geometry(page), `${item.name} / inner scroll`);
     await page.locator('.home-tab-content').evaluate(el => { el.querySelector('#local-scroll-fixture').remove(); el.scrollTop = 0; });
-    // Restore a control below the scroll edge and verify keyboard/focus reachability.
     const join = page.locator('.join-button');
     await join.scrollIntoViewIfNeeded();
     assert.ok(await join.isVisible());
