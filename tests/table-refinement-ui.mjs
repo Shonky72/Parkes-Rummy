@@ -21,7 +21,7 @@ function fixture(quick=false) {
  room.melds=[{id:'grow-run',ownerId:'human',kind:'run',constraint:'any',cards:Array.from({length:9},(_,i)=>({id:`run-${i}`,rank:i+5,suit:'H'}))},{id:'same-rank',ownerId:'human',kind:'set',constraint:'any',cards:Array.from({length:6},(_,i)=>({id:`set-${i}`,rank:7,suit:'D'}))},{id:'closed-run',ownerId:room.players[1].id,kind:'run',constraint:'any',cards:Array.from({length:10},(_,i)=>({id:`closed-${i}`,rank:i+5,suit:'S'}))}];
  room.players[1].down=true;return room;
 }
-const rects=page=>page.evaluate(()=>Object.fromEntries(['.game-header','.your-hand','.hand-status','.hand-draw-piles','.table-sidebar>.draw-section','.hand-layout','.hand-actions'].flatMap(s=>{const el=document.querySelector(s);if(!el)return[];const r=el.getBoundingClientRect();return[[s,{x:r.x,y:r.y,width:r.width,height:r.height}]];})));
+const rects=page=>page.evaluate(()=>Object.fromEntries(['.game-header','.your-hand','.hand-status','.hand-draw-piles','.table-sidebar>.draw-section','.hand-layout','.hand-actions','.last-event'].flatMap(s=>{const el=document.querySelector(s);if(!el)return[];const r=el.getBoundingClientRect();return[[s,{x:r.x,y:r.y,width:r.width,height:r.height}]];})));
 function equalGeometry(a,b,label){for(const s of Object.keys(a))for(const k of ['x','y','width','height'])assert.ok(Math.abs(a[s][k]-b[s][k])<1,`${label} moved ${s}.${k}: ${a[s][k]} -> ${b[s][k]}`);}
 async function mock(context,quick=false){let room=fixture(quick);const actions=[];await context.route('**/*',async route=>{
  const u=new URL(route.request().url());if(u.origin!==new URL(base).origin)return route.abort();
@@ -39,10 +39,17 @@ async function auditBadge(){
  try{
   await publicPage.goto('https://parkesrummy.com/',{waitUntil:'domcontentloaded',timeout:20000});await pause(2200);
   const badge=publicPage.locator('body>iframe#nl-badge-frame[title="Powered by Netlify"]');
-  const before=await badge.evaluate(e=>({position:getComputedStyle(e).position,width:e.offsetWidth,height:e.offsetHeight}));
-  await publicPage.addStyleTag({content:await readFile('app/table-readability.css','utf8')});await pause(100);
-  const after=await badge.evaluate(e=>{const r=e.getBoundingClientRect();return {position:getComputedStyle(e).position,width:e.offsetWidth,height:e.offsetHeight,right:r.right,viewport:innerWidth};});
-  assert.equal(after.position,'relative');assert.equal(after.width,before.width);assert.equal(after.height,before.height);assert.ok(after.viewport-after.right>=7&&after.viewport-after.right<=9);
+  const before=await badge.evaluate(e=>({position:getComputedStyle(e).position,width:e.offsetWidth,height:e.offsetHeight,headerTop:document.querySelector('.home-header').getBoundingClientRect().top}));
+  await publicPage.addStyleTag({content:await readFile('app/table-readability.css','utf8')});
+  // Exercise the same outer placement in a read-only page view, without changing
+  // the site, frame contents, cookies, account settings or game state.
+  await publicPage.evaluate(()=>{
+    const f=document.querySelector('body>iframe#nl-badge-frame[title="Powered by Netlify"]');const app=document.querySelector('.parkes-app');
+    f.style.setProperty('--parkes-badge-top',`${Math.ceil(app.getBoundingClientRect().bottom-document.body.getBoundingClientRect().top+8)}px`);
+    document.body.style.setProperty('--parkes-badge-clearance',`${f.offsetHeight+24}px`);
+  });await pause(100);
+  const after=await badge.evaluate(e=>{const r=e.getBoundingClientRect();return {position:getComputedStyle(e).position,width:e.offsetWidth,height:e.offsetHeight,right:r.right,viewport:innerWidth,top:r.top,pageBottom:document.querySelector('.parkes-app').getBoundingClientRect().bottom,headerTop:document.querySelector('.home-header').getBoundingClientRect().top};});
+  assert.equal(after.position,'absolute');assert.equal(after.width,before.width);assert.equal(after.height,before.height);assert.ok(after.viewport-after.right>=7&&after.viewport-after.right<=9);assert.ok(after.top>=after.pageBottom);assert.equal(after.headerTop,before.headerTop);
   await badge.scrollIntoViewIfNeeded();await publicPage.screenshot({path:`${output}/netlify-side-placement.png`});
   await writeFile(`${output}/netlify-frames.json`,JSON.stringify({before,after},null,2));
  }catch(e){await writeFile(`${output}/badge-audit-note.txt`,String(e));}await audit.close();
@@ -58,11 +65,15 @@ try{
   const overflow=await page.locator('.player-melds,.adaptive-meld-cards,.meld-fan').evaluateAll(es=>es.filter(e=>e.scrollWidth>e.clientWidth+2).map(e=>({class:e.className,scroll:e.scrollWidth,width:e.clientWidth})));
   assert.deepEqual(overflow,[],`${size.name}: overflowing melds`);
   const font=await page.locator('.status-message-visible').evaluate(e=>parseFloat(getComputedStyle(e).fontSize));
-  assert.ok(font>=13.99,`${size.name}: expected readable 14px minimum, received ${font}px`);
-  const large=await rects(page);const style=await page.addStyleTag({content:'.status-message-visible{font-size:9px!important}'});await pause(80);const small=await rects(page);equalGeometry(large,small,'Changing status font');await style.evaluate(e=>e.remove());await pause(100);
-  await page.evaluate(()=>{const f=document.createElement('iframe');f.id='nl-badge-frame';f.title='Powered by Netlify';f.style.cssText='position:fixed;bottom:0;right:0;width:194px;height:64px;border:0;z-index:2147483645';document.body.append(f);});
-  assert.equal(await page.locator('#nl-badge-frame').evaluate(e=>getComputedStyle(e).position),'relative');
-  const badgeGeometry=await rects(page);equalGeometry(large,badgeGeometry,'Netlify badge outside table');
+  const eventFont=await page.locator('.last-event').evaluate(e=>parseFloat(getComputedStyle(e).fontSize));
+  assert.ok(font>=13.99,`${size.name}: status font ${font}px`);assert.ok(eventFont>=13.99,`${size.name}: announcement font ${eventFont}px`);
+  const large=await rects(page);const oldEvent=size.width<850?'font-size:9px!important;line-height:1.5!important;padding:8px 3px!important;':'font-size:10px!important;line-height:1.5!important;padding:6px 7px 0!important;';
+  const style=await page.addStyleTag({content:'.status-message-visible{font-size:9px!important}.in-game .last-event{height:auto!important;max-height:none!important;min-height:15px!important;'+oldEvent+'}'});await pause(80);const small=await rects(page);equalGeometry(large,small,'Enlarged announcements');await style.evaluate(e=>e.remove());await pause(100);
+  // Match Netlify: its frame is inserted BEFORE the app, not conveniently after it.
+  await page.evaluate(()=>{const f=document.createElement('iframe');f.id='nl-badge-frame';f.title='Powered by Netlify';f.style.cssText='position:fixed;bottom:0;right:0;width:194px;height:64px;border:0;z-index:2147483645';document.body.insertBefore(f,document.body.firstChild);});
+  await page.waitForFunction(()=>!!document.getElementById('nl-badge-frame').style.getPropertyValue('--parkes-badge-top'));
+  const badge=await page.locator('#nl-badge-frame').evaluate(e=>({position:getComputedStyle(e).position,top:e.getBoundingClientRect().top,pageBottom:document.querySelector('.parkes-app').getBoundingClientRect().bottom}));assert.equal(badge.position,'absolute');assert.ok(badge.top>=badge.pageBottom);
+  equalGeometry(large,await rects(page),'Badge must not shift the page');
   await page.screenshot({path:`${output}/${size.name}-melds.png`,fullPage:true});
   await page.locator('[data-hand-card="hand-0"]').click();
   const target=page.locator('[data-meld-id="grow-run"].adaptive-meld [data-meld-end="end"]');
@@ -73,7 +84,7 @@ try{
   assert.equal(state.getRoom().melds.find(m=>m.id==='grow-run').cards.length,10);
   const complete=page.locator('[data-meld-id="grow-run"].adaptive-meld');await complete.locator('.complete-run-stack').click();assert.equal(await complete.locator('[data-table-card]').count(),10);assert.equal(await complete.locator('[data-meld-target]').count(),0);
   await complete.locator('.collapse-complete-run').click();
-  await page.screenshot({path:`${output}/${size.name}-complete.png`,fullPage:true});assert.deepEqual(errors,[]);results.push({screen:size.name,font,noMeldOverflow:true,fixedStatusGeometry:true,immediatePending:true,completeRunRetainsTenCards:true,badgeOutsideControls:true});await context.close();
+  await page.screenshot({path:`${output}/${size.name}-complete.png`,fullPage:true});assert.deepEqual(errors,[]);results.push({screen:size.name,font,eventFont,noMeldOverflow:true,fixedStatusGeometry:true,immediatePending:true,completeRunRetainsTenCards:true,badgeOutsideControls:true});await context.close();
  }
  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,reducedMotion:'reduce'});page=await context.newPage();await mock(context,true);
  await page.goto(`${base}/join/QUIK`,{waitUntil:'networkidle'});await page.locator('[data-hand-card="hand-0"]').click();await page.locator('.hand-actions>.button').filter({hasText:'Discard'}).click();await page.locator('.quick-result-actions').waitFor({timeout:15000});
