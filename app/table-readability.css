@@ -47,15 +47,20 @@
 }
 @media(prefers-reduced-motion:reduce){.in-game .complete-run-stack{transition:none}}
 
-/* The verified Netlify branding iframe belongs to the page edge, not on top of
-   Discard, Sort or site links. Only its outer placement changes: its contents,
-   dimensions, dismiss button and expanded card remain owned by Netlify.
-   Deliberately do not target advertising, auth or any other iframe. */
+/* The exact public branding frame gets its own right-aligned space AFTER page
+   content. Keep it out of the header even when Netlify inserts it first in body.
+   No iframe content or dimensions are changed, and other frames are untouched. */
+body:has(> iframe#nl-badge-frame[title="Powered by Netlify"]){
+  position:relative;
+  padding-bottom:var(--parkes-badge-clearance,88px);
+}
 body > iframe#nl-badge-frame[title="Powered by Netlify"]{
-  position:relative!important;
-  inset:auto!important;
+  position:absolute!important;
+  top:var(--parkes-badge-top,100dvh)!important;
+  bottom:auto!important;
+  left:auto!important;
+  right:8px!important;
   transform:none!important;
-  display:block;
-  margin:8px 8px 8px auto!important;
+  margin:0!important;
   z-index:1!important;
 }
