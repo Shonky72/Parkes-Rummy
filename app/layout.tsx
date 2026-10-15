@@ -16,14 +16,18 @@ import './draw-card-drag.css';
 import './developer-credit.css';
 import './monetization.css';
 import './store.css';
+import './install.css';
 import { fontCssUrl } from '../lib/store-catalog';
+import InstallSupport from './components/InstallSupport';
 
 export const metadata: Metadata = {
   title: 'Parkes Rummy',
   authors: [{ name: 'IBD Collective' }],
   creator: 'IBD Collective',
   description: 'Your table, your friends, your house rules. Play Parkes Rummy together in your browser. Up to eight players, ten rules, and twos are wild.',
-  icons: { icon: '/favicon.svg', shortcut: '/favicon.svg' },
+  manifest: '/manifest.webmanifest',
+  appleWebApp: { capable: true, title: 'Parkes Rummy', statusBarStyle: 'default' },
+  icons: { icon: '/favicon.svg', shortcut: '/favicon.svg', apple: [{ url: '/app-icon/180.png', sizes: '180x180', type: 'image/png' }] },
 };
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#062c22' };
 const ADSENSE_VERIFICATION_CLIENT = process.env.NEXT_PUBLIC_ADSENSE_CLIENT?.trim() || 'ca-pub-5430752526720484';
@@ -34,13 +38,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <link rel="preconnect" href="https://fonts.googleapis.com"/>
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous"/>
       <link rel="stylesheet" href={fontCssUrl()}/>
-      <script
-        async
-        src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_VERIFICATION_CLIENT}`}
-        crossOrigin="anonymous"
-      />
+      <script async src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_VERIFICATION_CLIENT}`} crossOrigin="anonymous"/>
     </head>
-    <body>{children}</body>
+    <body><InstallSupport>{children}</InstallSupport></body>
   </html>;
 }
-
