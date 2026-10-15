@@ -24,10 +24,20 @@ jobs:
       - run: npm run build
       - name: Install browser test tools
         run: npm install --no-save --package-lock=false playwright && npx playwright install --with-deps chromium
+      - name: Verify home footer in the first desktop view
+        run: node tests/home-footer-ui.mjs
       - name: Verify tutorial popups in the browser
         run: node tests/tutorial-ui.mjs && node tests/tutorial-responsive-ui.mjs
       - name: Verify installation guide in the browser
         run: node tests/install-ui.mjs
+      - name: Save home footer screenshots and checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: home-footer-ui-results
+          path: home-footer-ui-results/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Save tutorial screenshots and checks
         if: always()
         uses: actions/upload-artifact@v4
