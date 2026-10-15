@@ -19,18 +19,28 @@ jobs:
           node-version: 24
       - run: npm install
       - run: npm run typecheck
-      - run: node --import tsx --test tests/original-rules.test.ts tests/tutorial.test.ts tests/quick-play.test.ts tests/tutorial-coaching.test.ts
+      - run: node --import tsx --test tests/original-rules.test.ts tests/tutorial.test.ts tests/quick-play.test.ts tests/tutorial-coaching.test.ts tests/phone-install.test.ts
       - run: node --import tsx --test --test-name-pattern="Quick Play starts an atomic game" tests/account-api.test.ts
       - run: npm run build
       - name: Install browser test tools
         run: npm install --no-save --package-lock=false playwright && npx playwright install --with-deps chromium
       - name: Verify tutorial popups in the browser
         run: node tests/tutorial-ui.mjs && node tests/tutorial-responsive-ui.mjs
+      - name: Verify installation guide in the browser
+        run: node tests/install-ui.mjs
       - name: Save tutorial screenshots and checks
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: tutorial-ui-results
           path: tutorial-ui-results/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Save installation screenshots and checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-ui-results
+          path: install-ui-results/
           if-no-files-found: ignore
           retention-days: 7
