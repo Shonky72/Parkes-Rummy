@@ -4,6 +4,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+concurrency:
+  group: parkes-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -22,7 +25,7 @@ jobs:
       - name: Install browser test tools
         run: npm install --no-save --package-lock=false playwright && npx playwright install --with-deps chromium
       - name: Verify tutorial popups in the browser
-        run: node tests/tutorial-ui.mjs
+        run: node tests/tutorial-ui.mjs && node tests/tutorial-responsive-ui.mjs
       - name: Save tutorial screenshots and checks
         if: always()
         uses: actions/upload-artifact@v4
