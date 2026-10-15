@@ -1,0 +1,44 @@
+/* Only the copy grows: the original text still measures the status row. */
+.in-game .action-status-message{position:relative;overflow:visible}
+.in-game .status-message-measure{visibility:hidden}
+.in-game .status-message-visible{position:absolute;inset-inline:0;top:50%;transform:translateY(-50%);display:block;max-height:var(--status-copy-height,24px);overflow-y:auto;overflow-x:hidden;font-size:16px;line-height:1.18;font-weight:600;color:#f6f0df;overflow-wrap:break-word;scrollbar-width:thin;overscroll-behavior-y:auto}
+.in-game .action-status-message[data-pending=true] .status-message-visible{color:#ffe29a}
+.in-game .hand-status>.waiting-label{text-transform:none}
+.quick-result-actions{display:grid;gap:12px;margin-top:18px}
+.quick-result-actions>p{font-size:14px;line-height:1.5;color:#d1ddcd;text-align:center}
+.quick-result-actions>.button{width:100%}
+
+/* Rank corners remain visible. More cards overlap; oversized sets wrap, not scroll. */
+.in-game .player-melds{flex-wrap:wrap;overflow-x:hidden;align-items:flex-start;gap:12px}
+.in-game .player-melds>.adaptive-meld{flex:1 1 230px;min-width:0;max-width:100%;border-left:0;padding-left:0}
+.in-game .adaptive-meld>label{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0}
+.in-game .adaptive-meld-cards{gap:6px;align-items:flex-start;width:100%;max-width:100%;min-width:0}
+.in-game .meld-fan{flex:1 1 0;min-width:0;max-width:100%}
+.in-game .meld-fan-row{display:flex;align-items:flex-start;gap:0;max-width:100%;padding-bottom:3px}
+.in-game .meld-fan-row+.meld-fan-row{margin-top:15px}
+.in-game .meld-fan-row>.exposed-card-wrap+.exposed-card-wrap{margin-left:calc(-1 * var(--meld-overlap,0px))}
+.in-game .meld-fan-row>.exposed-card-wrap{outline-offset:1px}
+.in-game .meld-fan-row>.exposed-card-wrap:hover,.in-game .meld-fan-row>.exposed-card-wrap:focus-visible{z-index:30!important}
+.in-game .adaptive-meld .exposed-card-wrap .card-corner{left:4px;top:5px}
+.in-game .adaptive-meld .exposed-card-wrap .card-corner b{font-size:20px;letter-spacing:-.8px}
+.in-game .meld-corner-suit{position:absolute;top:26px;left:5px;font-family:Georgia,serif;font-size:16px;line-height:1;color:#111611;pointer-events:none}
+.in-game .meld-corner-suit.red{color:#bd2025}
+.in-game .adaptive-meld-cards>.meld-target,.in-game .meld-target-space{width:44px;min-width:44px;max-width:44px;flex:0 0 44px;min-height:44px}
+.in-game .adaptive-meld-cards>.meld-target{align-self:stretch;padding:4px 1px;font-size:10px;gap:4px;white-space:normal;overflow-wrap:anywhere}
+.in-game .meld-target-space{visibility:hidden}
+.in-game .closed-run-label{display:inline-flex;align-items:center;gap:4px;color:#f7d488;font-size:10px;line-height:1.3;text-transform:none;white-space:normal;text-align:right}
+.in-game .player-melds>.adaptive-meld[data-complete-run=true]{flex-basis:190px}
+.in-game .complete-run-stack{display:flex;align-items:center;gap:12px;max-width:100%;padding:0 8px 0 0;text-align:left;border-radius:9px;touch-action:manipulation}
+.in-game .complete-run-cards{display:flex;align-items:center;flex:none;pointer-events:none}
+.in-game .complete-run-cards>.exposed-card-wrap+ .exposed-card-wrap{margin-left:-36px;transform:rotate(4deg)}
+.in-game .complete-run-copy{display:grid;gap:4px;color:#e4e8d4;min-width:0}
+.in-game .complete-run-copy>strong{font-family:Georgia,serif;font-size:25px;color:#f6d17c}
+.in-game .complete-run-copy>span{font-size:12px}
+.in-game .complete-run-copy>small{display:flex;align-items:center;gap:3px;font-size:10px;color:#bdcfbd}
+.in-game .collapse-complete-run{font-size:11px;min-height:32px;margin-top:4px}
+@media(max-width:850px){
+  .in-game .status-message-visible{font-size:14px;line-height:1.16}
+  .in-game .player-melds>.adaptive-meld{flex-basis:220px}
+  .in-game .complete-run-cards>.exposed-card-wrap+ .exposed-card-wrap{margin-left:-28px}
+}
+@media(prefers-reduced-motion:reduce){.in-game .complete-run-stack{transition:none}}
