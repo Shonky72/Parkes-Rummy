@@ -1,0 +1,145 @@
+/* Small-screen usability only. Keep the approved desktop shell untouched. */
+.account-check-panel .account-loading-logo { margin: 0 0 24px; }
+.account-check-panel .account-loading-logo .brand { text-decoration: none; }
+.account-check-panel .account-loading-logo .brand-mark { width: 78px; height: 84px; }
+.account-check-panel .account-loading-logo .brand-large > span { font-size: 52px; }
+
+@media (max-width: 850px) {
+  /* A quick swipe scrolls naturally, even when it begins on a card/button.
+     Hand/pile code suppresses touchmove only AFTER a deliberate long hold. */
+  .parkes-app .hand-tray .hand-cards,
+  .parkes-app .hand-tray .hand-card,
+  .parkes-app .draw-section .draw-card-button,
+  .parkes-app .draw-section .draw-card-button:disabled { touch-action: pan-y pinch-zoom; }
+  .parkes-app .your-hand,
+  .parkes-app .hand-status,
+  .parkes-app .modal,
+  .parkes-app .modal button { touch-action: pan-y pinch-zoom; }
+  .parkes-app > .home-main > .start-panel > .home-tab-content { overscroll-behavior-y: auto; touch-action: pan-y pinch-zoom; }
+  .parkes-app .hand-status > p { overscroll-behavior-y: auto; }
+
+  /* Header items occupy their own cells. Nothing sits on top of the room code. */
+  .parkes-app .game-header {
+    display: grid;
+    grid-template-columns: 40px minmax(64px, 1fr) auto 40px 40px;
+    grid-template-rows: 48px auto;
+    gap: 5px 4px;
+    align-items: center;
+    padding: 5px 9px 6px;
+  }
+  .parkes-app .game-header > .brand { grid-area: 1 / 1; margin: 0; justify-self: start; }
+  .parkes-app .game-header .brand-mark { width: 32px; height: 40px; }
+  .parkes-app .game-header > .header-room-code {
+    grid-area: 1 / 2; position: static; transform: none; inset: auto;
+    width: 100%; min-width: 0; justify-self: center;
+  }
+  .parkes-app .game-header .header-room-code > strong { font-size: 21px; letter-spacing: .08em; }
+  .parkes-app .game-header .header-room-code[data-code-length="6"] > strong { font-size: 15px; }
+  .parkes-app .game-header > .game-header-details { display: contents; }
+  .parkes-app .game-header-details > .header-games-button { display: none; }
+  .parkes-app .game-header-details > .exit-game-button {
+    grid-area: 1 / 3; min-width: 0; min-height: 44px; padding: 7px 8px;
+    font-size: 11px; gap: 5px; margin: 0;
+  }
+  .parkes-app .game-header-details > .exit-game-button svg { width: 16px; height: 16px; }
+  .parkes-app .game-header-details > .icon-button { min-width: 40px; width: 40px; min-height: 44px; padding: 8px; margin: 0; }
+  .parkes-app .game-header-details > .icon-button[aria-label="Voice chat"] { grid-area: 1 / 4; }
+  .parkes-app .game-header-details > .icon-button[aria-label="Settings"] { grid-area: 1 / 5; }
+  .parkes-app .game-header > .table-tabs {
+    grid-column: 1 / 4; grid-row: 2;
+    position: static; inset: auto; transform: none;
+    margin: 0; padding: 0; width: 100%; min-width: 0;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  }
+  .parkes-app .game-header > .table-tabs > button,
+  .parkes-app .game-header > .table-tabs > button.active {
+    min-width: 0; min-height: 44px; margin: 0; padding: 7px 4px; font-size: 12px; white-space: normal;
+  }
+  .parkes-app .game-header-details > .game-pill {
+    grid-column: 4 / 6; grid-row: 2;
+    position: static; inset: auto; transform: none;
+    width: 100%; min-width: 0; max-width: 100%; min-height: 44px;
+    margin: 0; padding: 6px 3px; border-radius: 9px; font-size: 11px;
+    line-height: 1.15; white-space: normal; gap: 1px;
+  }
+  .parkes-app .game-header-details > .game-pill svg { width: 12px; height: 12px; }
+
+  /* Four rulesets, including the full Original Rules label, without clipping. */
+  .parkes-app .segmented.game-tabs {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%; max-width: 100%; min-width: 0; gap: 4px; padding: 4px;
+  }
+  .parkes-app .segmented.game-tabs > button {
+    min-width: 0; min-height: 44px; padding: 8px 5px;
+    white-space: normal; overflow-wrap: normal; font-size: 13px; line-height: 1.25;
+  }
+  .parkes-app .rules-modal { padding: 20px 16px; }
+  .parkes-app .rules-modal .modal-heading h2 { font-size: 29px; }
+  .parkes-app .rules-modal .rule-list { width: 100%; min-width: 0; }
+
+  /* Keep the existing title and fan, but give phone visitors the play controls
+     immediately instead of spending the first viewport on decorative artwork. */
+  .parkes-app > .home-header { padding: 8px 12px 5px; gap: 8px; }
+  .parkes-app > .home-header .brand-mark { width: 34px; height: 42px; }
+  .parkes-app > .home-header .header-actions { gap: 6px; }
+  .parkes-app > .home-header .how-button { font-size: 12px; min-height: 42px; padding: 7px 9px; gap: 5px; }
+  .parkes-app > .home-header .sound-button { width: 42px; min-width: 42px; height: 42px; min-height: 42px; }
+  .parkes-app > .home-header .home-settings { min-width: 34px; min-height: 42px; padding: 5px; margin: 0; }
+  .parkes-app > .home-main,
+  .parkes-app > .home-main.store-active {
+    margin-top: 0; padding: 0 12px 18px; row-gap: 10px; max-width: 570px;
+  }
+  .parkes-app > .home-main > .home-hero {
+    height: 102px; padding: 0; display: grid;
+    grid-template-columns: 1fr 1fr; align-items: center; overflow: hidden;
+  }
+  .parkes-app > .home-main > .home-hero .hero-title {
+    font-size: 51px; line-height: .85; letter-spacing: -2px; padding: 0 0 4px;
+    align-self: center; justify-self: center;
+  }
+  .parkes-app > .home-main > .home-hero .hero-card-fan {
+    margin: 0; padding: 0; width: 100%; height: 280px; max-width: none;
+    transform: scale(.25); transform-origin: center center;
+  }
+  .parkes-app > .home-main > .start-panel { padding: 16px 17px; }
+  .parkes-app > .home-main > .start-panel > h2 { font-size: 32px; line-height: 1.1; margin-bottom: 13px; }
+  .parkes-app > .home-main > .start-panel > .account-controls { margin-bottom: 13px; padding-bottom: 12px; }
+  .parkes-app > .home-main .account-signed-in { gap: 7px; }
+  .parkes-app > .home-main .account-signed-in strong { font-size: 13px; }
+  .parkes-app > .home-main .account-signed-in p { font-size: 11px; line-height: 1.4; }
+  .parkes-app > .home-main .account-signout { font-size: 11px; min-height: 42px; padding: 6px 8px; }
+  .parkes-app > .home-main .account-check { display: none; }
+  .parkes-app > .home-main .account-intro { font-size: 12px; gap: 6px; }
+  .parkes-app > .home-main .account-intro strong { font-size: 12px; }
+  .parkes-app > .home-main .account-intro p { font-size: 11px; }
+  .parkes-app > .home-main .google-signin { min-height: 42px; margin-top: 7px; font-size: 13px; }
+  .parkes-app > .home-main > .start-panel > .home-play-tabs { margin: 0 0 14px; padding: 4px; }
+  .parkes-app > .home-main .home-play-tabs > button { min-height: 39px; font-size: 12px; }
+  .parkes-app > .home-main .home-tab-content form > label { font-size: 16px; margin-bottom: 8px; }
+  .parkes-app > .home-main .name-input { min-height: 48px; padding: 7px 10px; gap: 8px; }
+  .parkes-app > .home-main .name-input .avatar { --avatar-size: 32px; }
+  .parkes-app > .home-main .name-input input { font-size: 17px; padding-left: 10px; }
+  .parkes-app > .home-main .home-main-action { min-height: 48px; font-size: 18px; padding: 9px; margin-top: 9px; }
+  .parkes-app > .home-main .home-main-action > svg { width: 23px; height: 23px; }
+  .parkes-app > .home-main .create-button.home-main-action { margin-top: 11px; }
+  .parkes-app > .home-main .home-tutorial-link { font-size: 15px; }
+}
+@media (max-width: 380px) {
+  .parkes-app .game-header { grid-template-columns: 34px minmax(58px, 1fr) auto 38px 38px; gap: 4px 3px; }
+  .parkes-app .game-header-details > .exit-game-button { width: 42px; min-width: 42px; padding: 8px; }
+  .parkes-app .game-header-details > .exit-game-button > span { display: none; }
+  .parkes-app .game-header-details > .icon-button { width: 38px; min-width: 38px; }
+  .parkes-app .game-header > .table-tabs > button { font-size: 11px; }
+  .parkes-app > .home-main > .home-hero .hero-title { font-size: 43px; }
+  .parkes-app > .home-main > .home-hero .hero-card-fan { transform: scale(.21); }
+}
+@media (max-width: 850px) and (max-height: 650px) {
+  .parkes-app > .home-main > .home-hero { height: 74px; }
+  .parkes-app > .home-main > .home-hero .hero-title { font-size: 39px; }
+  .parkes-app > .home-main > .home-hero .hero-card-fan { transform: scale(.20); }
+  .parkes-app > .home-main > .start-panel { padding: 12px 14px; }
+  .parkes-app > .home-main > .start-panel > h2 { font-size: 29px; margin-bottom: 9px; }
+  .parkes-app > .home-main > .start-panel > .account-controls { margin-bottom: 9px; padding-bottom: 8px; }
+  .parkes-app > .home-main > .start-panel > .home-play-tabs { margin-bottom: 9px; }
+  .parkes-app > .home-main .account-intro p { display: none; }
+}
