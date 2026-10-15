@@ -23,7 +23,7 @@ export interface DrawGestureContext {
   disabled: boolean;
   visible?: boolean;
 }
-export const DRAW_HOLD_MS = 200;
+export const DRAW_HOLD_MS = 350;
 export const DRAW_MOUSE_THRESHOLD = 6;
 export const DRAW_TOUCH_THRESHOLD = 8;
 

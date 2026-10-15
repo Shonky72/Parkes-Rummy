@@ -4,6 +4,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { Check, LogOut, RefreshCw, Smartphone } from 'lucide-react';
 import { getAccountSnapshot, getServerAccountSnapshot, monitorAccount, refreshAccount, signInWithGoogle, signOutAccount, subscribeAccount, type AccountSnapshot } from '../../lib/account-client';
 import '../account.css';
+import GameLogo from './GameLogo';
 
 export function useAccountSession() {
   const account = useSyncExternalStore(subscribeAccount, getAccountSnapshot, getServerAccountSnapshot);
@@ -29,5 +30,5 @@ export function AccountControls({ account, compact = false, disabled = false }: 
 }
 
 export function AccountLoading({ account }: { account: AccountSnapshot }) {
-  return <div className="parkes-app account-check-screen"><div className="felt-grain" aria-hidden="true"/><main className="panel account-check-panel" aria-busy={account.status === 'checking'}><span className="account-check-suit" aria-hidden="true">♠</span><h1>Parkes Rummy</h1>{account.status === 'error' ? <><p role="alert">{account.error}</p><button type="button" className="button gold" onClick={() => { void refreshAccount({ suspend: true, manual: true }); }}><RefreshCw size={18}/>Try again</button></> : <p role="status">{account.operation === 'signout' ? 'Signing out…' : account.operation === 'signin' ? 'Opening Google sign-in…' : 'Opening your table…'}</p>}</main></div>;
+  return <div className="parkes-app account-check-screen"><div className="felt-grain" aria-hidden="true"/><main className="panel account-check-panel" aria-busy={account.status === 'checking'}><h1 className="account-loading-logo"><GameLogo large/></h1>{account.status === 'error' ? <><p role="alert">{account.error}</p><button type="button" className="button gold" onClick={() => { void refreshAccount({ suspend: true, manual: true }); }}><RefreshCw size={18}/>Try again</button></> : <p role="status">{account.operation === 'signout' ? 'Signing out…' : account.operation === 'signin' ? 'Opening Google sign-in…' : 'Opening your table…'}</p>}</main></div>;
 }

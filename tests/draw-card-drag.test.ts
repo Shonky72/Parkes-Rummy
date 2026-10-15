@@ -7,7 +7,7 @@ import type { HandCardRect } from '../lib/hand-geometry';
 
 const current = (source: DrawCardSource = 'stock'): DrawGestureContext => ({ source, roomKey: 'ABCD:1:4:seat:9:playing', disabled: false, visible: true });
 const begin = (pointerType = 'mouse', source: DrawCardSource = 'stock'): DrawCardGesture => beginDrawGesture({ ...current(source), pointerId: 7, pointerType, isPrimary: true, button: 0, x: 20, y: 100, now: 1000 })!;
-const held = (source: DrawCardSource = 'stock') => holdDrawGesture(begin('touch', source), 1200);
+const held = (source: DrawCardSource = 'stock') => holdDrawGesture(begin('touch', source), 1350);
 const grid = (count = 10, columns = 5, lift: string[] = []): HandCardRect[] => Array.from({ length: count }, (_, index) => ({
   id: `card-${index + 1}`, left: 11 + (index % columns) * 65,
   top: 500 + Math.floor(index / columns) * 84 - (lift.includes(`card-${index + 1}`) ? 2 : 0), width: 59, height: 76,
@@ -34,11 +34,11 @@ test('mouse drags start at six pixels and preserve source and turn identity', ()
   assert.equal(gesture.mode, 'pending', 'Transition helpers leave earlier state intact');
 });
 
-test('touch and pen require a 200ms stationary hold while mouse holds remain taps', () => {
+test('touch and pen require a 350ms stationary hold while mouse holds remain taps', () => {
   for (const pointerType of ['touch', 'pen']) {
     const gesture = begin(pointerType);
-    assert.equal(holdDrawGesture(gesture, 1199).mode, 'pending');
-    assert.equal(holdDrawGesture(gesture, 1200).mode, 'drag');
+    assert.equal(holdDrawGesture(gesture, 1349).mode, 'pending');
+    assert.equal(holdDrawGesture(gesture, 1350).mode, 'drag');
   }
   assert.equal(holdDrawGesture(begin('mouse'), 5000).mode, 'pending');
 });

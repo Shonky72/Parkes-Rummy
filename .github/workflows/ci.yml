@@ -19,17 +19,31 @@ jobs:
           node-version: 24
       - run: npm install
       - run: npm run typecheck
-      - run: node --import tsx --test tests/original-rules.test.ts tests/tutorial.test.ts tests/quick-play.test.ts tests/tutorial-coaching.test.ts tests/phone-install.test.ts
+      - run: node --import tsx --test tests/original-rules.test.ts tests/tutorial.test.ts tests/quick-play.test.ts tests/tutorial-coaching.test.ts tests/phone-install.test.ts tests/bot-turn.test.ts tests/bot-turn-api.test.ts tests/rummy.test.ts tests/rule-progression.test.ts tests/draw-card-drag.test.ts
       - run: node --import tsx --test --test-name-pattern="Quick Play starts an atomic game" tests/account-api.test.ts
       - run: npm run build
       - name: Install browser test tools
+        id: browser_tools
         run: npm install --no-save --package-lock=false playwright && npx playwright install --with-deps chromium
-      - name: Verify home footer in the first desktop view
+      - name: Verify native phone gestures and immediate play access
+        run: node --import tsx tests/mobile-usability-ui.mjs
+      - name: Verify home footer and stationary desktop layout
+        if: ${{ !cancelled() && steps.browser_tools.outcome == 'success' }}
         run: node tests/home-footer-ui.mjs
       - name: Verify tutorial popups in the browser
+        if: ${{ !cancelled() && steps.browser_tools.outcome == 'success' }}
         run: node tests/tutorial-ui.mjs && node tests/tutorial-responsive-ui.mjs
       - name: Verify installation guide in the browser
+        if: ${{ !cancelled() && steps.browser_tools.outcome == 'success' }}
         run: node tests/install-ui.mjs
+      - name: Save mobile screenshots and checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-usability-results
+          path: mobile-usability-results/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Save home footer screenshots and checks
         if: always()
         uses: actions/upload-artifact@v4

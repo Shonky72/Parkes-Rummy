@@ -49,7 +49,7 @@ type Drop =
   | null;
 interface DragVisual { card: Card; width: number; height: number; transform: string }
 
-const HOLD_TO_DRAG = 200;
+const HOLD_TO_DRAG = 350;
 const TOUCH_MOVE_THRESHOLD = 8;
 const MOUSE_MOVE_THRESHOLD = 6;
 const SUIT_NAMES = { C: 'clubs', D: 'diamonds', H: 'hearts', S: 'spades' };
@@ -230,6 +230,7 @@ export default function HandCards(props: HandCardsProps) {
     if (gesture.timer !== null) window.clearTimeout(gesture.timer);
     gesture.timer = null;
     gesture.mode = 'drag';
+    try { gesture.button.setPointerCapture(gesture.pointerId); } catch { /* The browser may already own a cancelled touch. */ }
     latest.current.onDragCardChange(card.id);
     setDragVisual({ card, width: gesture.width, height: gesture.height, transform: ghostTransform(gesture) });
     setAnnouncement(`${cardName(card)} lifted. Move within your hand, onto a set, or onto a run end. Escape cancels.`);
@@ -250,8 +251,10 @@ export default function HandCards(props: HandCardsProps) {
     if (!event.isPrimary || event.button !== 0) return;
     if (gestureRef.current) finishGesture();
     ignoreClickRef.current = false;
-    event.preventDefault();
-    event.currentTarget.focus({ preventScroll: true });
+    if (event.pointerType === 'mouse') {
+      event.preventDefault();
+      event.currentTarget.focus({ preventScroll: true });
+    }
     const rect = event.currentTarget.getBoundingClientRect();
     const gesture: Gesture = {
       pointerId: event.pointerId, pointerType: event.pointerType || 'mouse', cardId: card.id,
@@ -262,7 +265,9 @@ export default function HandCards(props: HandCardsProps) {
       width: rect.width, height: rect.height, offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top,
     };
     gestureRef.current = gesture;
-    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* Capture may be unavailable for an already released pointer. */ }
+    if (gesture.pointerType === 'mouse') {
+      try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* Already released. */ }
+    }
     if (gesture.pointerType !== 'mouse') {
       gesture.timer = window.setTimeout(() => beginDrag(gesture), HOLD_TO_DRAG);
     }
@@ -271,29 +276,21 @@ export default function HandCards(props: HandCardsProps) {
   const onPointerMove = (event: PointerEvent<HTMLButtonElement>) => {
     const gesture = gestureRef.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
-    event.preventDefault();
     gesture.x = event.clientX;
     gesture.y = event.clientY;
-    const dx = gesture.x - gesture.startX;
-    const dy = gesture.y - gesture.startY;
-    if (gesture.mode === 'pending') {
-      if (gesture.pointerType === 'mouse') {
-        if (Math.hypot(dx, dy) >= MOUSE_MOVE_THRESHOLD) beginDrag(gesture);
-      } else if (Math.hypot(dx, dy) >= TOUCH_MOVE_THRESHOLD) {
-        if (performance.now() - gesture.startedAt >= HOLD_TO_DRAG) beginDrag(gesture);
-        else {
-          if (gesture.timer !== null) window.clearTimeout(gesture.timer);
-          gesture.timer = null;
-          const horizontalScroll = stripRef.current
-            && stripRef.current.scrollWidth > stripRef.current.clientWidth + 1;
-          gesture.mode = horizontalScroll && Math.abs(dx) >= Math.abs(dy) ? 'scroll' : 'page-scroll';
-        }
+    const distance = Math.hypot(gesture.x - gesture.startX, gesture.y - gesture.startY);
+    if (gesture.mode === 'pending' && gesture.pointerType !== 'mouse') {
+      if (distance >= TOUCH_MOVE_THRESHOLD) {
+        // A swipe belongs to the browser, including momentum and nested scroll
+        // containers. Do not turn a slow swipe into a card drag or a tap.
+        ignoreClickRef.current = true;
+        finishGesture();
       }
+      return;
     }
-    if (gesture.mode === 'scroll' && stripRef.current) stripRef.current.scrollLeft = gesture.startScroll - dx;
-    if (gesture.mode === 'page-scroll') window.scrollBy({ top: gesture.lastY - gesture.y, behavior: 'instant' });
+    if (gesture.pointerType === 'mouse' || gesture.mode === 'drag') event.preventDefault();
+    if (gesture.mode === 'pending' && distance >= MOUSE_MOVE_THRESHOLD) beginDrag(gesture);
     if (gesture.mode === 'drag') updateDrag();
-    gesture.lastY = gesture.y;
   };
 
   const onPointerUp = (event: PointerEvent<HTMLButtonElement>) => {
@@ -304,7 +301,8 @@ export default function HandCards(props: HandCardsProps) {
     gesture.y = event.clientY;
     const card = latest.current.cards.find(held => held.id === gesture.cardId);
     const drop = gesture.mode === 'drag' ? updateDrag() : null;
-    const mode = gesture.mode;
+    const mode = gesture.pointerType !== 'mouse' && gesture.mode === 'pending'
+      && Math.hypot(gesture.x - gesture.startX, gesture.y - gesture.startY) >= TOUCH_MOVE_THRESHOLD ? 'scroll' : gesture.mode;
     ignoreClickRef.current = true;
     finishGesture();
     if (!card || gesture.roomKey !== latest.current.roomKey) return;
@@ -353,7 +351,13 @@ export default function HandCards(props: HandCardsProps) {
   }, [cards, roomKey, finishGesture]);
 
   useEffect(() => {
-    const cancel = () => finishGesture();
+    const cancel = () => { ignoreClickRef.current = true; finishGesture(); };
+    const touchMove = (event: TouchEvent) => {
+      // Only an already lifted card suppresses scrolling. Changing touch-action
+      // mid-gesture is too late; this non-passive listener preserves hold/drag.
+      if (event.touches.length > 1) { cancel(); return; }
+      if (gestureRef.current?.mode === 'drag' && event.cancelable) event.preventDefault();
+    };
     const visibility = () => { if (document.visibilityState === 'hidden') cancel(); };
     const escape = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Escape' && gestureRef.current) {
@@ -362,10 +366,12 @@ export default function HandCards(props: HandCardsProps) {
         setAnnouncement('Card movement cancelled. Your hand is unchanged.');
       }
     };
+    window.addEventListener('touchmove', touchMove, { passive: false });
     document.addEventListener('keydown', escape);
     document.addEventListener('visibilitychange', visibility);
     window.addEventListener('blur', cancel);
     return () => {
+      window.removeEventListener('touchmove', touchMove);
       document.removeEventListener('keydown', escape);
       document.removeEventListener('visibilitychange', visibility);
       window.removeEventListener('blur', cancel);

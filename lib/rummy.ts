@@ -649,7 +649,7 @@ function finishHand(room: RoomState, winner: PlayerState): void {
 
 function paceBots(room: RoomState): void {
   const bot = room.players.find(player => player.id === room.turnPlayerId);
-  room.botDueAt = room.status === 'playing' && bot?.isBot ? Date.now() + (room.phase === 'draw' ? 800 : 650) : 0;
+  room.botDueAt = room.status === 'playing' && bot?.isBot ? Date.now() + (room.phase === 'draw' ? 240 : 120) : 0;
 }
 
 function removeFromHand(player: PlayerState, cardId: string): Card {
@@ -1017,6 +1017,24 @@ function bestDiscard(view: PublicRoom, difficulty: Difficulty): Card {
   return best;
 }
 
+/** Search the exact same opening contract used when a human goes down.
+ * Original Rules has extra suit/rank restrictions not represented by the broad
+ * planning hints in RuleDefinition.requirements. Never submit those hints as a
+ * legal opening. At most eleven own cards are searched; no hidden cards enter.
+ */
+export function findBotOpening(hand: Card[], game: GameType, ruleNumber: number): Meld[] | null {
+  const definition = RULES[game]?.[ruleNumber - 1];
+  if (!definition || hand.length > 11) return null;
+  if (game !== 4) return searchOpening(hand, definition);
+  const count = definition.requirements.reduce((sum, group) => sum + group.count, 0);
+  if (hand.length < count) return null;
+  for (const mask of combinations(hand.length, count)) {
+    const opening = findOpeningMelds(cardsForMask(hand, mask), game, ruleNumber);
+    if (opening) return opening;
+  }
+  return null;
+}
+
 /** Deliberately accepts only public state: hidden hands and the stock sequence are unavailable. */
 export function chooseBotAction(view: PublicRoom, difficulty: Difficulty = 'medium'): GameAction {
   if (view.status !== 'playing' || view.turnPlayerId !== view.youId) throw new GameError('This AI player is waiting for its turn.');
@@ -1030,7 +1048,7 @@ export function chooseBotAction(view: PublicRoom, difficulty: Difficulty = 'medi
       if (own.down && getLayoffTargets(discard, view.melds).length) return { type: 'draw', source: 'discard' };
       if (!own.down) {
         const extended = [...view.hand, discard];
-        if (searchOpening(extended, definition)) return { type: 'draw', source: 'discard' };
+        if (findBotOpening(extended, view.game, ruleNumberFor(own, view.round))) return { type: 'draw', source: 'discard' };
         if (difficulty === 'hard') {
           const planner = makeOpeningPlanner(extended, definition);
           const previous = planner((1 << view.hand.length) - 1);
@@ -1046,7 +1064,7 @@ export function chooseBotAction(view: PublicRoom, difficulty: Difficulty = 'medi
     return { type: 'draw', source: 'stock' };
   }
   if (canGoDown(view)) {
-    const opening = searchOpening(view.hand, definition);
+    const opening = findBotOpening(view.hand, view.game, ruleNumberFor(own, view.round));
     if (opening) return { type: 'goDown', cardIds: opening.flatMap(meld => meld.cards.map(card => card.id)), expectedRuleNumber: ruleNumberFor(own, view.round) };
   }
   if (canLayoff(view)) {
