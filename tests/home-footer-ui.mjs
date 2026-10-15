@@ -16,6 +16,7 @@ const results = [];
 const failures = [];
 const user = { id: 'footer-ui-player', name: 'Dan Schonberg', email: 'footer@example.test', image: null };
 function account(signed) { return { configured: true, user: signed ? user : null, entitlements: { removeAds: signed, premiumFonts: false, premiumSymbols: false, voiceChat: false, originalRules: false }, profile: { font: 'default', symbol: 'initials' }, accessAdmin: false }; }
+const documentBox = locator => locator.evaluate(el => { const r = el.getBoundingClientRect(); return { x: r.x + scrollX, y: r.y + scrollY, width: r.width }; });
 
 try {
   let ready = false;
@@ -29,6 +30,7 @@ try {
     { name: 'full-hd', width: 1920, height: 1000, signed: false, completed: false, firstFold: true },
     { name: 'laptop', width: 1366, height: 768, signed: true, completed: true, firstFold: true },
     { name: 'laptop-first-visit', width: 1366, height: 768, signed: true, completed: false, firstFold: true },
+    { name: 'laptop-guest', width: 1366, height: 768, signed: false, completed: false, firstFold: true },
     { name: 'phone', width: 390, height: 844, signed: true, completed: false },
     { name: 'small-phone', width: 320, height: 568, signed: false, completed: false },
   ];
@@ -52,20 +54,21 @@ try {
     await page.goto(base, { waitUntil: 'networkidle' });
     const footer = page.locator('.home-information-footer');
     await footer.waitFor({ state: 'visible' });
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(150);
     const initial = await footer.evaluate(el => {
       const rect = el.getBoundingClientRect();
       const panel = document.querySelector('.start-panel').getBoundingClientRect();
       const main = document.querySelector('.home-main').getBoundingClientRect();
       const image = el.querySelector('.developer-wordmark');
       const links = [...el.querySelectorAll('.site-links a')];
+      const credits = [...document.querySelectorAll('.developer-credit')].map(e => ({ parent: e.parentElement.className, visible: e.getBoundingClientRect().height > 0 && getComputedStyle(e).visibility !== 'hidden' }));
       return {
-        top: rect.top, bottom: rect.bottom, height: rect.height,
+        top: rect.top, bottom: rect.bottom, footerHeight: rect.height,
         panelBottom: panel.bottom, mainTop: main.top,
         creditSize: parseFloat(getComputedStyle(el.querySelector('.developer-credit')).fontSize),
         linkSize: parseFloat(getComputedStyle(links[0]).fontSize),
         logoWidth: image.getBoundingClientRect().width,
-        linkCount: links.length,
+        linkCount: links.length, credits,
         overflow: document.documentElement.scrollWidth > innerWidth + 1,
         scrollY, position: getComputedStyle(el).position,
       };
@@ -74,6 +77,7 @@ try {
     await page.screenshot({ path: `${output}/${item.name}.png` });
     await page.screenshot({ path: `${output}/${item.name}-full.png`, fullPage: true });
     assert.equal(await footer.count(), 1);
+    if (initial.credits.filter(c => c.visible).length !== 1) failures.push(`${item.name}: duplicate credits ${JSON.stringify(initial.credits)}`);
     assert.equal(initial.overflow, false, `${item.name}: horizontal overflow`);
     assert.ok(initial.creditSize >= 16 && initial.linkSize >= 15, `${item.name}: small footer text`);
     assert.ok(initial.logoWidth >= 225, `${item.name}: logo too small`);
@@ -82,15 +86,23 @@ try {
     assert.ok(initial.top >= initial.panelBottom - 1, `${item.name}: footer must not cover play controls`);
     if (item.firstFold && (initial.bottom > item.height + 1 || initial.scrollY !== 0)) failures.push(`${item.name}: footer bottom ${initial.bottom}, viewport ${item.height}, initial scroll ${initial.scrollY}`);
     const nav = page.locator('.home-play-tabs');
-    const before = await nav.boundingBox();
+    const before = await documentBox(nav);
     await nav.getByRole('button', { name: 'Your Games', exact: true }).click();
-    const after = await nav.boundingBox();
-    assert.ok(Math.abs(before.x - after.x) < 1 && Math.abs(before.y - after.y) < 1, 'Tabs must stay still');
+    const after = await documentBox(nav);
+    if (Math.abs(before.x - after.x) > 1 || Math.abs(before.y - after.y) > 1) failures.push(`${item.name}: Games tabs moved ${JSON.stringify({ before, after })}`);
     await nav.getByRole('button', { name: 'Store', exact: true }).click();
-    const store = await nav.boundingBox();
-    assert.ok(Math.abs(before.x - store.x) < 1 && Math.abs(before.y - store.y) < 1, 'Store must keep the same tab position');
+    const store = await documentBox(nav);
+    if (Math.abs(before.x - store.x) > 1 || Math.abs(before.y - store.y) > 1) failures.push(`${item.name}: Store tabs moved ${JSON.stringify({ before, store })}`);
     assert.equal(await footer.count(), 1);
     await nav.getByRole('button', { name: 'Play', exact: true }).click();
+    // Reserve ad space locally only. No ad network request or ad click is made.
+    await page.evaluate(() => {
+      const ad = document.createElement('aside'); ad.className = 'ad-slot ad-slot-home'; ad.id = 'footer-test-ad'; ad.style.height = '180px';
+      document.querySelector('.home-main').append(ad);
+    });
+    const order = await page.evaluate(() => ({ footer: document.querySelector('.home-information-footer').getBoundingClientRect().bottom, ad: document.getElementById('footer-test-ad').getBoundingClientRect().top }));
+    assert.ok(order.footer <= order.ad, 'Future ads must not push the footer down');
+    await page.evaluate(() => document.getElementById('footer-test-ad').remove());
     const lastLink = footer.locator('.site-links a').last();
     await lastLink.scrollIntoViewIfNeeded();
     assert.equal(await lastLink.evaluate(el => { const r = el.getBoundingClientRect(); const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2); return hit === el || el.contains(hit); }), true);
@@ -101,7 +113,7 @@ try {
   }
   await writeFile(`${output}/checks.json`, JSON.stringify({ results, failures }, null, 2));
   console.log(JSON.stringify({ results, failures }, null, 2));
-  assert.deepEqual(failures, [], 'Desktop footer should be visible without the first scroll');
+  assert.deepEqual(failures, [], 'Desktop footer should be visible once without the first scroll and tabs should stay aligned');
 } catch (error) {
   await writeFile(`${output}/checks.json`, JSON.stringify({ results, failures, error: String(error) }, null, 2));
   try { await currentPage?.screenshot({ path: `${output}/failure.png`, fullPage: true }); } catch {}
