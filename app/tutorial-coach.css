@@ -4,7 +4,10 @@
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
 }
-.tutorial-app .tutorial-table { width: 100%; min-width: 0; }
+.tutorial-app .tutorial-table { width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.tutorial-app .tutorial-opponent { min-width: 0; }
+.tutorial-app .tutorial-opponent-backs { min-width: 0; max-width: 100%; }
+.tutorial-app .tutorial-opponent-backs > .tutorial-back { flex: 0 1 31px; min-width: 0; }
 .tutorial-app .tutorial-controls { min-height: 58px; }
 .tutorial-app .tutorial-bottom { grid-column: 1; }
 .tutorial-app .tutorial-header { max-width: 1130px; }
