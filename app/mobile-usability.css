@@ -85,8 +85,8 @@
   .parkes-app > .home-header .how-button { font-size: 12px; min-height: 42px; padding: 7px 9px; gap: 5px; }
   .parkes-app > .home-header .sound-button { width: 42px; min-width: 42px; height: 42px; min-height: 42px; }
   .parkes-app > .home-header .home-settings { min-width: 34px; min-height: 42px; padding: 5px; margin: 0; }
-  .parkes-app > .home-main,
-  .parkes-app > .home-main.store-active {
+  .parkes-app > .home-main:has(> .home-information-footer),
+  .parkes-app > .home-main.store-active:has(> .home-information-footer) {
     margin-top: 0; padding: 0 12px 18px; row-gap: 10px; max-width: 570px;
   }
   .parkes-app > .home-main > .home-hero {
