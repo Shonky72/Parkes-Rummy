@@ -19,9 +19,11 @@ import './store.css';
 import './install.css';
 import './home-information.css';
 import './mobile-usability.css';
+import './table-readability.css';
 import { fontCssUrl } from '../lib/store-catalog';
 import InstallSupport from './components/InstallSupport';
 import HomeInformation from './components/HomeInformation';
+import NetlifyBadgeDock from './components/NetlifyBadgeDock';
 
 export const metadata: Metadata = {
   title: 'Parkes Rummy',
@@ -43,6 +45,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <link rel="stylesheet" href={fontCssUrl()}/>
       <script async src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_VERIFICATION_CLIENT}`} crossOrigin="anonymous"/>
     </head>
-    <body><InstallSupport>{children}<HomeInformation/></InstallSupport></body>
+    <body><InstallSupport>{children}<HomeInformation/><NetlifyBadgeDock/></InstallSupport></body>
   </html>;
 }
