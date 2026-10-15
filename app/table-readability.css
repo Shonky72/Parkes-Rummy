@@ -42,3 +42,16 @@
   .in-game .complete-run-cards>.exposed-card-wrap+ .exposed-card-wrap{margin-left:-28px}
 }
 @media(prefers-reduced-motion:reduce){.in-game .complete-run-stack{transition:none}}
+
+/* The verified Netlify branding iframe belongs to the page edge, not on top of
+   Discard, Sort or site links. Only its outer placement changes: its contents,
+   dimensions, dismiss button and expanded card remain owned by Netlify.
+   Deliberately do not target advertising, auth or any other iframe. */
+body > iframe#nl-badge-frame[title="Powered by Netlify"]{
+  position:relative!important;
+  inset:auto!important;
+  transform:none!important;
+  display:block;
+  margin:8px 8px 8px auto!important;
+  z-index:1!important;
+}
