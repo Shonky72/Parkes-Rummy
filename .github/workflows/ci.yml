@@ -18,7 +18,7 @@ jobs:
           node-version: 24
       - run: npm install
       - run: npm run typecheck
-      - run: node --import tsx --test tests/original-rules.test.ts tests/tutorial.test.ts tests/quick-play.test.ts tests/tutorial-coaching.test.ts tests/phone-install.test.ts tests/bot-turn.test.ts tests/bot-turn-api.test.ts tests/rummy.test.ts tests/rule-progression.test.ts tests/draw-card-drag.test.ts tests/meld-layout.test.ts
+      - run: node --import tsx --test tests/original-rules.test.ts tests/tutorial.test.ts tests/quick-play.test.ts tests/tutorial-coaching.test.ts tests/phone-install.test.ts tests/bot-turn.test.ts tests/bot-turn-api.test.ts tests/rummy.test.ts tests/rule-progression.test.ts tests/draw-card-drag.test.ts tests/meld-layout.test.ts tests/request-origin.test.ts
       - run: node --import tsx --test --test-name-pattern="Quick Play starts an atomic game" tests/account-api.test.ts
       - run: npm run build
       - name: Install browser test tools
@@ -38,6 +38,11 @@ jobs:
       - name: Verify installation guide in the browser
         if: ${{ !cancelled() && steps.browser_tools.outcome == 'success' }}
         run: node tests/install-ui.mjs
+      - name: Confirm real Chrome Origin on Netlify preview
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          NETLIFY_PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node tests/netlify-room-origin.mjs
       - name: Save table refinement screenshots and checks
         if: always()
         uses: actions/upload-artifact@v4
