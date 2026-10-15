@@ -5,6 +5,7 @@ import { resolveAccountUser } from './auth';
 import { readAuthConfig, accountMarker, ACCOUNT_IDENTITY_HEADER, type AccountUser } from './auth-config';
 import { applyAction, createPlayer, createRoom, lastMoveAtFor, publicRoom, roomPreview, ruleNumberFor } from './rummy';
 import { chooseQuickPlaySetup } from './quick-play';
+import { advanceBotTurn } from './bot-turn';
 import { isRoomCode, normalizeRoomCode, ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from './room-code';
 import { ROOM_PROTOCOL, ROOM_PROTOCOL_HEADER, ROOM_UPDATE_MESSAGE } from './room-protocol';
 import type { Difficulty, GameAction, PlayerState, RoomState, RoomSummary, RoomSummaryResult } from './types';
@@ -340,7 +341,7 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
         }
         if (action.type === 'botStep' && (room.status !== 'playing' || !room.players.find(candidate => candidate.id === room.turnPlayerId)?.isBot || Date.now() < room.botDueAt)) return reply({ room: publicRoom(room, player.id) });
         if (action.type === 'timeout' && (room.status !== 'playing' || !room.turnDeadline || Date.now() < room.turnDeadline)) return reply({ room: publicRoom(room, player.id) });
-        const next = applyAction(room, player.id, action);
+        const next = action.type === 'botStep' ? advanceBotTurn(room, player.id) : applyAction(room, player.id, action);
         next.recentActions = [...room.recentActions, requestKey].slice(-64);
         if (next.version <= version) next.version = version + 1;
         next.updatedAt = Date.now();

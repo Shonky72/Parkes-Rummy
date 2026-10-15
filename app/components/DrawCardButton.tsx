@@ -166,6 +166,7 @@ export default function DrawCardButton(props: DrawCardButtonProps) {
     if (!drawGestureIsCurrent(gesture.state, currentContext()) || !matchingHand(gesture.state.roomKey)) { cancelGesture(); return; }
     if (gesture.timer !== null) window.clearTimeout(gesture.timer);
     gesture.timer = null;
+    try { gesture.button.setPointerCapture(gesture.state.pointerId); } catch { /* Touch was cancelled by the browser. */ }
     activationRef.current!.pointerFinished();
     setVisual({ content: latest.current.renderGhost(), width: gesture.width, height: gesture.height, transform: ghostTransform(gesture) });
     updateDrag();
@@ -187,8 +188,10 @@ export default function DrawCardButton(props: DrawCardButtonProps) {
     const state = beginDrawGesture({ ...currentContext(), pointerId: event.pointerId, pointerType: event.pointerType, isPrimary: event.isPrimary, button: event.button, x: event.clientX, y: event.clientY, now: performance.now() });
     if (!state) return;
     activationRef.current!.pointerStarted();
-    event.preventDefault();
-    event.currentTarget.focus({ preventScroll: true });
+    if (state.pointerType === 'mouse') {
+      event.preventDefault();
+      event.currentTarget.focus({ preventScroll: true });
+    }
     const bounds = event.currentTarget.getBoundingClientRect();
     const gesture: Gesture = {
       state, button: event.currentTarget, width: bounds.width, height: bounds.height,
@@ -196,7 +199,9 @@ export default function DrawCardButton(props: DrawCardButtonProps) {
       lastX: state.x, lastY: state.y, timer: null,
     };
     gestureRef.current = gesture;
-    try { event.currentTarget.setPointerCapture(state.pointerId); } catch { /* Window listeners cover unavailable capture. */ }
+    if (state.pointerType === 'mouse') {
+      try { event.currentTarget.setPointerCapture(state.pointerId); } catch { /* Window listeners cover unavailable capture. */ }
+    }
     const held = () => {
       if (gestureRef.current !== gesture) return;
       const now = performance.now();
@@ -213,9 +218,13 @@ export default function DrawCardButton(props: DrawCardButtonProps) {
       const gesture = gestureRef.current;
       if (!gesture || gesture.state.pointerId !== event.pointerId) return;
       if (!drawGestureIsCurrent(gesture.state, currentContext())) { cancelGesture(); return; }
-      event.preventDefault();
       const mode = gesture.state.mode;
       gesture.state = moveDrawGesture(gesture.state, event.clientX, event.clientY);
+      if (gesture.state.pointerType !== 'mouse' && mode !== 'drag') {
+        if (gesture.state.mode === 'scroll') cancelGesture();
+        return; // Native scroll, not a draw and not an imitation window scroll.
+      }
+      event.preventDefault();
       if (gesture.state.mode === 'scroll') {
         activationRef.current!.pointerFinished();
         if (gesture.timer !== null) window.clearTimeout(gesture.timer);
@@ -243,10 +252,15 @@ export default function DrawCardButton(props: DrawCardButtonProps) {
     const cancelled = (event: globalThis.PointerEvent) => { if (gestureRef.current?.state.pointerId === event.pointerId) cancelGesture(); };
     const secondPointer = (event: globalThis.PointerEvent) => { if (gestureRef.current && gestureRef.current.state.pointerId !== event.pointerId) cancelGesture(); };
     const blur = () => cancelGesture();
+    const touchMove = (event: TouchEvent) => {
+      if (event.touches.length > 1) { cancelGesture(); return; }
+      if (gestureRef.current?.state.mode === 'drag' && event.cancelable) event.preventDefault();
+    };
     const hidden = () => { if (document.hidden) cancelGesture(); };
     const escape = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Escape' && gestureRef.current) { event.preventDefault(); cancelGesture(); }
     };
+    window.addEventListener('touchmove', touchMove, { passive: false });
     window.addEventListener('pointermove', move, { capture: true, passive: false });
     window.addEventListener('pointerup', release, { capture: true, passive: false });
     window.addEventListener('pointercancel', cancelled, true);
@@ -255,6 +269,7 @@ export default function DrawCardButton(props: DrawCardButtonProps) {
     document.addEventListener('visibilitychange', hidden);
     document.addEventListener('keydown', escape);
     return () => {
+      window.removeEventListener('touchmove', touchMove);
       window.removeEventListener('pointermove', move, true);
       window.removeEventListener('pointerup', release, true);
       window.removeEventListener('pointercancel', cancelled, true);
