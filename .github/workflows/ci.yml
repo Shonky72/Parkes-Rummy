@@ -38,6 +38,11 @@ jobs:
       - name: Verify installation guide in the browser
         if: ${{ !cancelled() && steps.browser_tools.outcome == 'success' }}
         run: node tests/install-ui.mjs
+      - name: Confirm real Chrome Origin on Netlify preview
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          NETLIFY_PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node tests/netlify-room-origin.mjs
       - name: Save table refinement screenshots and checks
         if: always()
         uses: actions/upload-artifact@v4
