@@ -91,7 +91,7 @@
   }
   .parkes-app > .home-main > .home-hero {
     height: 102px; padding: 0; display: grid;
-    grid-template-columns: 1fr 1fr; align-items: center; overflow: hidden;
+    grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr); align-items: center; overflow: hidden;
   }
   .parkes-app > .home-main > .home-hero .hero-title {
     font-size: 51px; line-height: .85; letter-spacing: -2px; padding: 0 0 4px;
@@ -141,5 +141,5 @@
   .parkes-app > .home-main > .start-panel > h2 { font-size: 29px; margin-bottom: 9px; }
   .parkes-app > .home-main > .start-panel > .account-controls { margin-bottom: 9px; padding-bottom: 8px; }
   .parkes-app > .home-main > .start-panel > .home-play-tabs { margin-bottom: 9px; }
-  .parkes-app > .home-main .account-intro p { display: none; }
+  .parkes-app > .home-main .account-intro { display: none; }
 }
