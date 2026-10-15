@@ -13,10 +13,21 @@ server?.stdout.pipe(log); server?.stderr.pipe(log);
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 let browser, currentPage;
 const results = [];
-const failures = [];
 const user = { id: 'footer-ui-player', name: 'Dan Schonberg', email: 'footer@example.test', image: null };
 function account(signed) { return { configured: true, user: signed ? user : null, entitlements: { removeAds: signed, premiumFonts: false, premiumSymbols: false, voiceChat: false, originalRules: false }, profile: { font: 'default', symbol: 'initials' }, accessAdmin: false }; }
-const documentBox = locator => locator.evaluate(el => { const r = el.getBoundingClientRect(); return { x: r.x + scrollX, y: r.y + scrollY, width: r.width }; });
+
+const fixedSelectors = ['.home-header', '.home-hero', '.hero-title', '.hero-card-fan', '.start-panel', '.start-panel > h2', '.account-controls', '.home-play-tabs', '.home-information-footer', '.home-information-footer .developer-wordmark', '.home-information-footer .site-links'];
+async function geometry(page) {
+  return page.evaluate(selectors => Object.fromEntries(selectors.map(selector => {
+    const el = document.querySelector(selector), box = el.getBoundingClientRect();
+    return [selector, { x: box.x + scrollX, y: box.y + scrollY, width: box.width, height: box.height }];
+  })), fixedSelectors);
+}
+function sameShell(before, after, label) {
+  for (const selector of fixedSelectors) for (const key of ['x', 'y', 'width', 'height']) {
+    assert.ok(Math.abs(before[selector][key] - after[selector][key]) <= 1, `${label}: ${selector} ${key} moved: ${before[selector][key]} to ${after[selector][key]}`);
+  }
+}
 
 try {
   let ready = false;
@@ -24,13 +35,13 @@ try {
   assert.ok(ready);
   browser = await chromium.launch({ headless: true });
   const cases = [
-    { name: 'desktop-screenshot', width: 1408, height: 1060, signed: true, completed: true, firstFold: true },
-    { name: 'desktop-first-visit', width: 1440, height: 900, signed: true, completed: false, firstFold: true },
-    { name: 'desktop-guest', width: 1440, height: 900, signed: false, completed: false, firstFold: true },
-    { name: 'full-hd', width: 1920, height: 1000, signed: false, completed: false, firstFold: true },
-    { name: 'laptop', width: 1366, height: 768, signed: true, completed: true, firstFold: true },
-    { name: 'laptop-first-visit', width: 1366, height: 768, signed: true, completed: false, firstFold: true },
-    { name: 'laptop-guest', width: 1366, height: 768, signed: false, completed: false, firstFold: true },
+    { name: 'desktop-screenshot', width: 1408, height: 1060, signed: true, completed: true },
+    { name: 'desktop-first-visit', width: 1440, height: 900, signed: true, completed: false },
+    { name: 'desktop-guest', width: 1440, height: 900, signed: false, completed: false },
+    { name: 'full-hd', width: 1920, height: 1000, signed: false, completed: false },
+    { name: 'laptop', width: 1366, height: 768, signed: true, completed: true },
+    { name: 'laptop-first-visit', width: 1366, height: 768, signed: true, completed: false },
+    { name: 'laptop-guest', width: 1366, height: 768, signed: false, completed: false },
     { name: 'phone', width: 390, height: 844, signed: true, completed: false },
     { name: 'small-phone', width: 320, height: 568, signed: false, completed: false },
   ];
@@ -52,70 +63,86 @@ try {
       return route.continue();
     });
     await page.goto(base, { waitUntil: 'networkidle' });
-    const footer = page.locator('.home-information-footer');
-    await footer.waitFor({ state: 'visible' });
-    await page.waitForTimeout(150);
-    const initial = await footer.evaluate(el => {
-      const rect = el.getBoundingClientRect();
-      const panel = document.querySelector('.start-panel').getBoundingClientRect();
-      const main = document.querySelector('.home-main').getBoundingClientRect();
-      const image = el.querySelector('.developer-wordmark');
-      const links = [...el.querySelectorAll('.site-links a')];
-      const credits = [...document.querySelectorAll('.developer-credit')].map(e => ({ parent: e.parentElement.className, visible: e.getBoundingClientRect().height > 0 && getComputedStyle(e).visibility !== 'hidden' }));
-      return {
-        top: rect.top, bottom: rect.bottom, footerHeight: rect.height,
-        panelBottom: panel.bottom, mainTop: main.top,
-        creditSize: parseFloat(getComputedStyle(el.querySelector('.developer-credit')).fontSize),
-        linkSize: parseFloat(getComputedStyle(links[0]).fontSize),
-        logoWidth: image.getBoundingClientRect().width,
-        linkCount: links.length, credits,
-        overflow: document.documentElement.scrollWidth > innerWidth + 1,
-        scrollY, position: getComputedStyle(el).position,
+    await page.locator('.home-information-footer').waitFor({ state: 'visible' });
+    await page.waitForTimeout(200);
+    const shell = await geometry(page);
+    const info = await page.evaluate(() => {
+      const box = sel => document.querySelector(sel).getBoundingClientRect();
+      const footer = document.querySelector('.home-information-footer');
+      const content = document.querySelector('.start-panel > .home-tab-content');
+      const input = box('.code-entry-form .code-input'), join = box('.join-button');
+      const nameLabel = box('label[for=home-name]'), nameInput = box('.name-input');
+      return { footerBottom: box('.home-information-footer').bottom, footerTop: box('.home-information-footer').top,
+        panelBottom: box('.start-panel').bottom, scrollY, overflow: document.documentElement.scrollWidth > innerWidth + 1,
+        logoWidth: box('.home-information-footer .developer-wordmark').width,
+        creditSize: parseFloat(getComputedStyle(footer.querySelector('.developer-credit')).fontSize),
+        linkSize: parseFloat(getComputedStyle(footer.querySelector('.site-links')).fontSize),
+        linksBelowLogo: box('.home-information-footer .site-links').top >= box('.home-information-footer .developer-wordmark').bottom,
+        linkCentre: (box('.home-information-footer .site-links').left + box('.home-information-footer .site-links').right) / 2,
+        footerCentre: (box('.home-information-footer').left + box('.home-information-footer').right) / 2,
+        nameStacked: nameLabel.bottom <= nameInput.top + 1,
+        joinStacked: input.bottom <= join.top + 1 && Math.abs(input.width - join.width) < 1,
+        contentHeight: content.clientHeight, contentScrollHeight: content.scrollHeight,
+        headerFont: parseFloat(getComputedStyle(document.querySelector('.start-panel > h2')).fontSize),
+        buttonFont: parseFloat(getComputedStyle(document.querySelector('.create-button')).fontSize),
+        visibleCredits: [...document.querySelectorAll('.developer-credit')].filter(e => e.getBoundingClientRect().height > 0).length,
       };
     });
-    results.push({ ...item, ...initial });
+    assert.equal(info.overflow, false, `${item.name}: horizontal overflow`);
+    assert.equal(info.visibleCredits, 1);
+    assert.equal(info.nameStacked, true, 'Restore label ABOVE the name input');
+    assert.equal(info.joinStacked, true, 'Restore Join game BELOW the full-width room code input');
+    assert.equal(info.creditSize, 18); assert.equal(info.linkSize, 15);
+    assert.equal(info.logoWidth, 276, 'Exactly 1.5 times the original 184px logo');
+    assert.equal(info.linksBelowLogo, true, 'Restore site links below the centred credit');
+    assert.ok(Math.abs(info.linkCentre - info.footerCentre) < 1);
+    assert.ok(info.footerTop >= info.panelBottom, 'Footer does not overlay the play panel');
+    if (item.width > 850) {
+      assert.ok(info.headerFont >= 36 && info.buttonFont >= 22, 'Do not shrink original text to fit a redesign');
+      assert.ok(info.footerBottom <= item.height + 1, `${item.name}: footer below viewport ${info.footerBottom}`);
+      assert.ok(info.footerBottom >= item.height - 35, 'Use the full vertical screen instead of packing everything at the top');
+      assert.equal(info.scrollY, 0);
+    }
     await page.screenshot({ path: `${output}/${item.name}.png` });
-    await page.screenshot({ path: `${output}/${item.name}-full.png`, fullPage: true });
-    assert.equal(await footer.count(), 1);
-    if (initial.credits.filter(c => c.visible).length !== 1) failures.push(`${item.name}: duplicate credits ${JSON.stringify(initial.credits)}`);
-    assert.equal(initial.overflow, false, `${item.name}: horizontal overflow`);
-    assert.ok(initial.creditSize >= 16 && initial.linkSize >= 15, `${item.name}: small footer text`);
-    assert.ok(initial.logoWidth >= 225, `${item.name}: logo too small`);
-    assert.ok(initial.linkCount >= 4, `${item.name}: missing site information links`);
-    assert.notEqual(initial.position, 'fixed');
-    assert.ok(initial.top >= initial.panelBottom - 1, `${item.name}: footer must not cover play controls`);
-    if (item.firstFold && (initial.bottom > item.height + 1 || initial.scrollY !== 0)) failures.push(`${item.name}: footer bottom ${initial.bottom}, viewport ${item.height}, initial scroll ${initial.scrollY}`);
     const nav = page.locator('.home-play-tabs');
-    const before = await documentBox(nav);
-    await nav.getByRole('button', { name: 'Your Games', exact: true }).click();
-    const after = await documentBox(nav);
-    if (Math.abs(before.x - after.x) > 1 || Math.abs(before.y - after.y) > 1) failures.push(`${item.name}: Games tabs moved ${JSON.stringify({ before, after })}`);
-    await nav.getByRole('button', { name: 'Store', exact: true }).click();
-    const store = await documentBox(nav);
-    if (Math.abs(before.x - store.x) > 1 || Math.abs(before.y - store.y) > 1) failures.push(`${item.name}: Store tabs moved ${JSON.stringify({ before, store })}`);
-    assert.equal(await footer.count(), 1);
-    await nav.getByRole('button', { name: 'Play', exact: true }).click();
-    // Reserve ad space locally only. No ad network request or ad click is made.
-    await page.evaluate(() => {
-      const ad = document.createElement('aside'); ad.className = 'ad-slot ad-slot-home'; ad.id = 'footer-test-ad'; ad.style.height = '180px';
-      document.querySelector('.home-main').append(ad);
+    for (const tab of ['Your Games', 'Store', 'Play']) {
+      await nav.getByRole('button', { name: tab, exact: true }).click();
+      await page.waitForTimeout(100);
+      sameShell(shell, await geometry(page), `${item.name} / ${tab}`);
+      if (item.width > 850) assert.equal(await page.evaluate(() => scrollY), 0, 'Desktop must not jump during tab selection');
+      if (item.name === 'desktop-screenshot') await page.screenshot({ path: `${output}/desktop-${tab.replace(/ /g, '-').toLowerCase()}.png` });
+    }
+    // Prove overflowing content scrolls ONLY inside the right-hand tab viewport.
+    const beforeScroll = await geometry(page);
+    const scrollY = await page.evaluate(() => window.scrollY);
+    await page.locator('.home-tab-content').evaluate(el => {
+      const longContent = document.createElement('div'); longContent.id = 'local-scroll-fixture'; longContent.style.height = '1800px';
+      el.append(longContent); el.scrollTop = el.scrollHeight;
     });
-    const order = await page.evaluate(() => ({ footer: document.querySelector('.home-information-footer').getBoundingClientRect().bottom, ad: document.getElementById('footer-test-ad').getBoundingClientRect().top }));
-    assert.ok(order.footer <= order.ad, 'Future ads must not push the footer down');
-    await page.evaluate(() => document.getElementById('footer-test-ad').remove());
-    const lastLink = footer.locator('.site-links a').last();
-    await lastLink.scrollIntoViewIfNeeded();
-    assert.equal(await lastLink.evaluate(el => { const r = el.getBoundingClientRect(); const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2); return hit === el || el.contains(hit); }), true);
+    await page.waitForTimeout(100);
+    assert.ok(await page.locator('.home-tab-content').evaluate(el => el.scrollTop) > 0);
+    assert.equal(await page.evaluate(() => window.scrollY), scrollY);
+    sameShell(beforeScroll, await geometry(page), `${item.name} / inner scroll`);
+    await page.locator('.home-tab-content').evaluate(el => { el.querySelector('#local-scroll-fixture').remove(); el.scrollTop = 0; });
+    // Restore a control below the scroll edge and verify keyboard/focus reachability.
+    const join = page.locator('.join-button');
+    await join.scrollIntoViewIfNeeded();
+    assert.ok(await join.isVisible());
+    sameShell(shell, await geometry(page), `${item.name} / reach Join`);
+    const footer = page.locator('.home-information-footer');
+    const link = footer.locator('.site-links a').last();
+    await link.scrollIntoViewIfNeeded();
+    assert.equal(await link.evaluate(el => { const r = el.getBoundingClientRect(); const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2); return hit === el || el.contains(hit); }), true);
+    results.push({ ...item, ...info, stableAcrossAllTabs: true, isolatedScrolling: true });
     await page.goto(`${base}/tutorial`, { waitUntil: 'networkidle' });
-    assert.equal(await page.locator('.home-information-footer').count(), 0, 'No home footer over tutorial/game controls');
+    assert.equal(await page.locator('.home-information-footer').count(), 0);
     assert.deepEqual(errors, [], `${item.name}: page errors`);
     await context.close();
   }
-  await writeFile(`${output}/checks.json`, JSON.stringify({ results, failures }, null, 2));
-  console.log(JSON.stringify({ results, failures }, null, 2));
-  assert.deepEqual(failures, [], 'Desktop footer should be visible once without the first scroll and tabs should stay aligned');
+  await writeFile(`${output}/checks.json`, JSON.stringify({ results }, null, 2));
+  console.log(JSON.stringify(results, null, 2));
 } catch (error) {
-  await writeFile(`${output}/checks.json`, JSON.stringify({ results, failures, error: String(error) }, null, 2));
+  await writeFile(`${output}/checks.json`, JSON.stringify({ results, error: String(error) }, null, 2));
   try { await currentPage?.screenshot({ path: `${output}/failure.png`, fullPage: true }); } catch {}
   throw error;
 } finally { await browser?.close(); server?.kill('SIGTERM'); log.end(); }
