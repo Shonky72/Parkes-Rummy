@@ -58,8 +58,11 @@ test('A persisted five-minute-old Original Rules turn recovers once under concur
 });
 test('Not-due and unauthorized bot requests do not mutate the table', async () => {
   const original = await savedTable('WAIT', Date.now()+60_000);
+  // Database JSON omits optional undefined fields. Compare persisted state to
+  // persisted state so this assertion measures mutation, not JSON encoding.
+  const before = (await repository.load('WAIT'))!.room;
   assert.equal((await step('WAIT','too-early')).status,200);
   assert.equal((await repository.load('WAIT'))!.version,original.version);
   assert.equal((await step('WAIT','outsider','b'.repeat(64))).status,403);
-  assert.deepEqual((await repository.load('WAIT'))!.room,original);
+  assert.deepEqual((await repository.load('WAIT'))!.room,before);
 });
