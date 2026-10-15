@@ -48,6 +48,8 @@ export interface ScoreRow {
 }
 export interface RoundResult { round: number; winnerId: string; winnerName: string; scores: ScoreRow[] }
 export interface RoomState {
+  /** Present only on new single-hand Quick Play rooms; old saves retain normal progression. */
+  quickPlay?: { ruleNumber: number };
   code: string; hostId: string; game: GameType; round: number;
   status: 'lobby' | 'playing' | 'round-end' | 'finished';
   players: PlayerState[]; stock: Card[]; discardPile: Card[]; melds: Meld[];
@@ -61,6 +63,8 @@ export interface RoomState {
   recentActions: string[];
 }
 export interface PublicRoom {
+  /** Present only on new single-hand Quick Play rooms; old saves retain normal progression. */
+  quickPlay?: { ruleNumber: number };
   code: string; hostId: string; game: GameType; round: number;
   status: RoomState['status']; players: PublicPlayer[]; hand: Card[];
   youId: string; melds: Meld[]; turnPlayerId: string; phase: 'draw' | 'play';
@@ -75,12 +79,16 @@ export interface PublicRoom {
   updatedAt?: number; lastMoveAt?: number | null;
 }
 export interface RoomPreview {
+  /** Present only on new single-hand Quick Play rooms; old saves retain normal progression. */
+  quickPlay?: { ruleNumber: number };
   code: string; hostName: string; game: GameType; status: RoomState['status'];
   playerCount: number; players: { id: string; name: string; color: number; isBot: boolean; fontId?: FontId; symbolId?: SymbolId }[];
   showMoveHints?: boolean;
 }
 /** Seat-authorized metadata for switching tables; excludes all cards and credentials. */
 export interface RoomSummary {
+  /** Present only on new single-hand Quick Play rooms; old saves retain normal progression. */
+  quickPlay?: { ruleNumber: number };
   code: string; game: GameType; status: RoomState['status'];
   hostName: string; isHost: boolean; playerCount: number; playerNames: string[];
   yourPlayerId: string; yourName: string; yourRuleNumber: number; round: number;

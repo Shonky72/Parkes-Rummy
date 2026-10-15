@@ -164,6 +164,7 @@ function roomSummary(room: RoomState, player: PlayerState): RoomSummary {
   const current = room.status === 'playing' ? room.players.find(candidate => candidate.id === room.turnPlayerId) : undefined;
   return {
     code: room.code, game: room.game, status: room.status,
+    ...(room.quickPlay ? { quickPlay: { ...room.quickPlay } } : {}),
     hostName: room.players.find(candidate => candidate.id === room.hostId)?.name ?? 'The host',
     isHost: player.id === room.hostId,
     playerCount: room.players.length, playerNames: room.players.map(candidate => candidate.name),
@@ -217,6 +218,7 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
       for (let attempt = 0; attempt < 8; attempt++) {
         let room = createRoom(roomCode(), host);
         if (quickPlay) {
+          room.quickPlay = { ruleNumber: quickPlay.ruleNumber };
           room = applyAction(room, host.id, { type: 'setGame', game: quickPlay.game });
           for (const difficulty of quickPlay.difficulties) room = applyAction(room, host.id, { type: 'addBot', difficulty });
           room = applyAction(room, host.id, { type: 'start' });
@@ -230,8 +232,7 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
       return reply({ preview: roomPreview(room) });
     }),
     readRoomRequest: (request: Request, rawCode: string) => handle(async () => {
-      const identity = await identityFor(request, resolveSession);
-      const record = await load(codeOf(rawCode));
+      const [identity, record] = await Promise.all([identityFor(request, resolveSession), load(codeOf(rawCode))]);
       const player = await authorizedPlayer(record, identity);
       return reply({ room: publicRoom(record.room, player.id) });
     }),
@@ -312,12 +313,12 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
     actionRoomRequest: (request: Request, rawCode: string) => handle(async () => {
       requireCurrentProtocol(request);
       const body = await bodyOf(request);
-      const identity = await identityFor(request, resolveSession);
       const code = codeOf(rawCode);
       const action = validateAction(body.action);
+      const [identity, firstRecord] = await Promise.all([identityFor(request, resolveSession), load(code)]);
       if (typeof body.requestId !== 'string' || body.requestId.length < 4 || body.requestId.length > 100) throw new ApiError('Please retry this action.');
       for (let attempt = 0; attempt < 8; attempt++) {
-        const record = await load(code);
+        const record = attempt === 0 ? firstRecord : await load(code);
         const { room, version } = record;
         const player = await authorizedPlayer(record, identity);
         const requestKey = `${player.id}:${body.requestId}`;
@@ -347,7 +348,7 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
         next.updatedAt = Date.now();
         if (!next.players.some(candidate => !candidate.isBot)) {
           if (await repository.delete(code, version)) return reply({ room: null, left: true });
-        } else if (await repository.save(next, version)) {
+        } else if (await repository.save(next, version, undefined, { membershipUnchanged: next.players.length === room.players.length && next.players.every(p => room.players.some(old => old.id === p.id && old.isBot === p.isBot)) })) {
           const stillPresent = next.players.some(candidate => candidate.id === player.id);
           return reply({ room: stillPresent ? publicRoom(next, player.id) : null, left: !stillPresent });
         }

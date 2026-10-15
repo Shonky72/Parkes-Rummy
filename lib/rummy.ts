@@ -554,6 +554,7 @@ export function publicRoom(original: RoomState, youId: string): PublicRoom {
   const own = room.players.find(player => player.id === youId);
   return {
     code: room.code, hostId: room.hostId, game: room.game, round: room.round, status: room.status,
+    ...(room.quickPlay ? { quickPlay: { ...room.quickPlay } } : {}),
     players: room.players.map(({ id, name, color, hand, score, ruleNumber, down, completedTurns, laidDownTurn, isBot, difficulty, ready, fontId, symbolId }) => ({ id, name, color, handCount: hand.length, score, ruleNumber, down, completedTurns, laidDownTurn, isBot, difficulty, ready, fontId: fontId ?? 'default', symbolId: symbolId ?? 'initials' })),
     hand: own?.hand ?? [], youId,
     currentRule: clone(RULES[room.game][ruleNumberFor(own, room.round) - 1]),
@@ -569,6 +570,7 @@ export function publicRoom(original: RoomState, youId: string): PublicRoom {
 export function roomPreview(room: RoomState): RoomPreview {
   return {
     code: room.code, hostName: room.players.find(player => player.id === room.hostId)?.name ?? 'The host',
+    ...(room.quickPlay ? { quickPlay: { ...room.quickPlay } } : {}),
     game: room.game, status: room.status, playerCount: room.players.length,
     showMoveHints: room.showMoveHints !== false,
     players: room.players.map(({ id, name, color, isBot, fontId, symbolId }) => ({ id, name, color, isBot, fontId: fontId ?? 'default', symbolId: symbolId ?? 'initials' })),
@@ -631,13 +633,13 @@ function finishHand(room: RoomState, winner: PlayerState): void {
     return {
       playerId: player.id, name: player.name, penalty, total: player.score, cards: clone(player.hand),
       ruleNumber, melded: player.down,
-      nextRuleNumber: Math.min(10, ruleNumber + Number(player.down)),
-      completed: player.down && ruleNumber === 10,
+      nextRuleNumber: room.quickPlay ? ruleNumber : Math.min(10, ruleNumber + Number(player.down)),
+      completed: !room.quickPlay && player.down && ruleNumber === 10,
     };
   });
   room.result = { round: room.round, winnerId: winner.id, winnerName: winner.name, scores };
   room.history.push(clone(room.result));
-  room.status = scores.some(row => row.completed) ? 'finished' : 'round-end';
+  room.status = room.quickPlay || scores.some(row => row.completed) ? 'finished' : 'round-end';
   room.turnDeadline = null;
   event(room, 'round-end', `${winner.name} went out and ended hand ${room.round}.`, winner.id);
   if (room.status === 'finished') {
@@ -723,7 +725,7 @@ export function applyAction(original: RoomState, actorId: string, action: GameAc
     }
     case 'addBot': {
       requireHost(room, actor); requireLobby(room);
-      if (room.players.length >= 8) throw new GameError('All eight seats are filled.');
+      if (room.players.length >= (room.quickPlay ? 4 : 8)) throw new GameError(room.quickPlay ? 'Quick Play has four seats maximum.' : 'All eight seats are filled.');
       if (!DIFFICULTIES.includes(action.difficulty)) throw new GameError('Choose easy, medium or hard.');
       const freeColor = Array.from({ length: 8 }, (_, index) => index).find(color => !room.players.some(player => player.color === color)) ?? room.players.length;
       const botNames = ['Alex', 'Sam', 'Riley', 'Charlie', 'Morgan', 'Jamie', 'Taylor', 'Casey'];
@@ -771,12 +773,14 @@ export function applyAction(original: RoomState, actorId: string, action: GameAc
       if (room.players.some(player => !player.ready)) throw new GameError('Wait for every player to be ready.');
       room.round = 1;
       room.history = [];
-      for (const player of room.players) { player.score = 0; player.ruleNumber = 1; }
+      if (room.quickPlay && (!Number.isInteger(room.quickPlay.ruleNumber) || room.quickPlay.ruleNumber < 1 || room.quickPlay.ruleNumber > 10 || room.players.length > 4)) throw new GameError('Invalid Quick Play setup. Start a new quick hand.');
+      for (const player of room.players) { player.score = 0; player.ruleNumber = room.quickPlay?.ruleNumber ?? 1; }
       beginHand(room);
       break;
     }
     case 'nextHand': {
       requireHost(room, actor);
+      if (room.quickPlay) throw new GameError('Quick Play ends after one hand. Start a new Quick Play from home.');
       if (room.status !== 'round-end') throw new GameError('Finish the current hand before dealing the next one.');
       for (const player of room.players) {
         if (player.down) player.ruleNumber = Math.min(10, ruleNumberFor(player, room.round) + 1);
@@ -787,6 +791,7 @@ export function applyAction(original: RoomState, actorId: string, action: GameAc
     }
     case 'rematch': {
       requireHost(room, actor);
+      if (room.quickPlay) throw new GameError('This quick hand is finished. Start a new Quick Play from home.');
       if (action.expectedVersion !== undefined) {
         if (!Number.isSafeInteger(action.expectedVersion) || action.expectedVersion < 1) throw new GameError('Refresh your games before starting a rematch.');
         if (room.status !== 'finished' || action.expectedVersion !== room.version) throw new GameError('This game has changed. Review the latest table before starting a rematch.', 'ROOM_CHANGED');
