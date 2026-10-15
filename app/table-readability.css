@@ -4,6 +4,9 @@
 .in-game .status-message-visible{position:absolute;inset-inline:0;top:50%;transform:translateY(-50%);display:block;max-height:var(--status-copy-height,24px);overflow-y:auto;overflow-x:hidden;font-size:16px;line-height:1.18;font-weight:600;color:#f6f0df;overflow-wrap:break-word;scrollbar-width:thin;overscroll-behavior-y:auto}
 .in-game .action-status-message[data-pending=true] .status-message-visible{color:#ffe29a}
 .in-game .hand-status>.waiting-label{text-transform:none}
+/* Announcements such as Alex drew a card keep their existing single-line
+   desktop box and phone band. Longer phone messages scroll within that space. */
+.in-game .last-event{box-sizing:border-box;height:21px;min-height:21px;max-height:21px;padding:1.5px 7px;font-size:16px;line-height:18px;font-weight:500;color:#eaf0df;overflow-y:auto;overflow-x:hidden;overflow-wrap:break-word;scrollbar-width:thin;overscroll-behavior-y:auto}
 .quick-result-actions{display:grid;gap:12px;margin-top:18px}
 .quick-result-actions>p{font-size:14px;line-height:1.5;color:#d1ddcd;text-align:center}
 .quick-result-actions>.button{width:100%}
@@ -38,6 +41,7 @@
 .in-game .collapse-complete-run{font-size:11px;min-height:32px;margin-top:4px}
 @media(max-width:850px){
   .in-game .status-message-visible{font-size:14px;line-height:1.16}
+  .in-game .last-event{height:29.5px;min-height:29.5px;max-height:29.5px;padding:.75px 3px;font-size:14px;line-height:14px}
   .in-game .player-melds>.adaptive-meld{flex-basis:220px}
   .in-game .complete-run-cards>.exposed-card-wrap+ .exposed-card-wrap{margin-left:-28px}
 }
