@@ -73,7 +73,7 @@ body:has(.home-information-footer) .developer-footer { display: none; }
 @media (min-width: 851px) {
   .parkes-app > .home-main:has(> .home-information-footer) {
     /* Set from viewport, header and footer geometry, never from active content. */
-    grid-template-rows: var(--home-panel-height, max(480px, calc(100svh - 244px))) auto;
+    grid-template-rows: var(--home-panel-height, max(640px, calc(100svh - 244px))) auto;
   }
   .parkes-app > .home-main > .home-hero {
     grid-column: 1;
@@ -90,6 +90,7 @@ body:has(.home-information-footer) .developer-footer { display: none; }
     grid-template-rows: auto var(--home-panel-height, 940px) auto;
   }
   .parkes-app > .home-main > .home-hero { grid-column: 1; grid-row: 1; }
+  .parkes-app > .home-main > .home-hero .hero-card-fan { transform-origin: center center; }
   .parkes-app > .home-main > .start-panel { grid-column: 1; grid-row: 2; }
   .parkes-app > .home-main > .home-information-footer { grid-row: 3; }
   .parkes-app > .home-main > .ad-slot-home { grid-column: 1; grid-row: 4; }
