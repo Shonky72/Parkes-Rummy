@@ -25,9 +25,11 @@ jobs:
           git diff --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add app/components/AccountControls.tsx app/components/DrawCardButton.tsx app/components/HandCards.tsx app/components/ParkesApp.tsx app/layout.tsx lib/draw-card-drag.ts lib/room-server.ts lib/rummy.ts tests/draw-card-drag.test.ts
-          git commit -m 'Fix native mobile swipes, remove duplicate player labels, and validate faster AI turns'
-          git push origin HEAD:refs/heads/fix/mobile-play-and-ai-turns
+          git add app/mobile-usability.css
+          if ! git diff --cached --quiet; then
+            git commit -m 'Show compact phone artwork and keep guest Quick Play above the fold'
+            git push origin HEAD:refs/heads/fix/mobile-play-and-ai-turns
+          fi
       - run: npm install
       - run: npm run typecheck
       - name: Legal AI and existing engine regressions
