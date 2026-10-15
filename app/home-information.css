@@ -1,0 +1,138 @@
+/* Home-only layout: keep player information in normal flow and off game tables. */
+.parkes-app > .home-main:has(> .home-information-footer) {
+  min-height: 0;
+  row-gap: 16px;
+  padding-bottom: 16px;
+}
+.home-information-footer {
+  grid-column: 1 / -1;
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  padding: 12px 4px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid #9eb69c57;
+}
+.home-information-footer .developer-credit {
+  gap: 6px 16px;
+  font-size: 16px;
+  line-height: 1.4;
+  color: #d5e0d2;
+}
+.home-information-footer .developer-wordmark {
+  width: 248px;
+  max-width: 100%;
+  height: auto;
+}
+.home-information-footer .site-links {
+  gap: 2px 18px;
+  margin-top: 3px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.home-information-footer .site-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  color: #d5e0d2;
+  padding: 3px 0;
+}
+.home-information-footer .site-links a:hover,
+.home-information-footer .site-links a:focus-visible { color: #f4d17d; }
+
+@media (min-width: 851px) {
+  .parkes-app:has(> .home-header) > .home-header {
+    padding-top: 10px;
+    padding-bottom: 6px;
+  }
+  .parkes-app > .home-main:has(> .home-information-footer) {
+    min-height: 0;
+    margin-top: 0;
+    padding-top: 6px;
+    row-gap: 14px;
+    align-items: start;
+  }
+  .parkes-app > .home-main .start-panel {
+    padding: 20px 26px;
+  }
+  .parkes-app > .home-main .start-panel > h2 {
+    font-size: 42px;
+    line-height: 1.1;
+    margin-bottom: 14px;
+  }
+  .parkes-app > .home-main .start-panel > .account-controls {
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+  }
+  .parkes-app > .home-main .home-play-tabs { margin: 0 0 16px; }
+  .parkes-app > .home-main .home-tab-content form > label {
+    font-size: 18px;
+    margin-bottom: 9px;
+  }
+  .parkes-app > .home-main .name-input { min-height: 56px; padding-top: 7px; padding-bottom: 7px; }
+  .parkes-app > .home-main .name-input .avatar { --avatar-size: 42px; }
+  .parkes-app > .home-main .home-main-action {
+    min-height: 56px;
+    font-size: 22px;
+    margin-top: 10px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .parkes-app > .home-main .create-button.home-main-action { margin-top: 12px; }
+  .parkes-app > .home-main .or-divider { margin: 18px 0 12px; font-size: 17px; }
+  .parkes-app > .home-main .text-input { min-height: 54px; padding-top: 11px; padding-bottom: 11px; }
+  .parkes-app > .home-main .join-button { min-height: 54px; margin-top: 10px; font-size: 22px; }
+  .parkes-app > .home-main .invite-help { font-size: 14px; line-height: 1.4; margin: 10px 0 12px; }
+  .parkes-app > .home-main .browser-note { padding-top: 12px; font-size: 13px; line-height: 1.45; }
+  .home-information-footer .developer-credit { flex-wrap: nowrap; }
+  .home-information-footer .developer-wordmark { width: 248px; flex-shrink: 0; }
+  .home-information-footer .site-links { width: auto; margin: 0 0 0 16px; flex: 1; justify-content: flex-end; }
+}
+
+/* On shorter desktop screens, reclaim form whitespace instead of clipping the
+   footer, pinning it over buttons, shrinking its text or moving the tabs. */
+@media (min-width: 851px) and (max-height: 900px) {
+  .parkes-app > .home-main .start-panel { padding: 16px 24px; }
+  .parkes-app > .home-main .start-panel > h2 { font-size: 36px; margin-bottom: 10px; }
+  .parkes-app > .home-main .start-panel > .account-controls { margin-bottom: 10px; padding-bottom: 10px; }
+  .parkes-app > .home-main .home-play-tabs { margin-bottom: 12px; }
+  .parkes-app > .home-main .code-entry-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(145px, .75fr);
+    align-items: end;
+    column-gap: 12px;
+    row-gap: 8px;
+  }
+  .parkes-app > .home-main .code-entry-form > label { grid-column: 1 / -1; margin: 0; }
+  .parkes-app > .home-main .code-entry-form > .join-button { margin: 0; font-size: 20px; }
+  .parkes-app > .home-main .or-divider { margin-top: 14px; }
+  .parkes-app > .home-main .invite-help { margin: 8px 0 10px; }
+  .parkes-app > .home-main .browser-note { padding-top: 10px; }
+  .parkes-app > .home-main .google-signin { margin-top: 8px; }
+}
+@media (min-width: 851px) and (max-height: 780px) {
+  .parkes-app > .home-header .brand-mark { max-height: 52px; width: 47px; }
+  .parkes-app > .home-header .how-button { min-height: 42px; padding: 8px 16px; font-size: 16px; }
+  .parkes-app > .home-main .start-panel { padding-top: 12px; padding-bottom: 12px; }
+  .parkes-app > .home-main .start-panel > h2 { font-size: 32px; margin-bottom: 8px; }
+  .parkes-app > .home-main .home-main-action { min-height: 50px; margin-top: 8px; padding-top: 8px; padding-bottom: 8px; }
+  .parkes-app > .home-main .name-input { min-height: 50px; }
+  .parkes-app > .home-main .name-input .avatar { --avatar-size: 36px; }
+  .parkes-app > .home-main .text-input,
+  .parkes-app > .home-main .join-button { min-height: 50px; }
+  .parkes-app > .home-main .home-tab-content form > label { font-size: 17px; margin-bottom: 6px; }
+  .parkes-app > .home-main .or-divider { margin: 12px 0 10px; }
+  .home-information-footer { padding-top: 8px; padding-bottom: 8px; }
+}
+@media (min-width: 851px) and (max-width: 1100px) {
+  .home-information-footer .developer-credit { flex-wrap: wrap; }
+  .home-information-footer .site-links { flex-basis: 100%; justify-content: center; margin: 0; }
+}
+@media (max-width: 850px) {
+  .home-information-footer { margin-top: 14px; padding-top: 16px; }
+  .home-information-footer .site-links { gap: 3px 16px; }
+  .home-information-footer .site-links a { min-height: 40px; }
+}
+@media (max-width: 400px) {
+  .home-information-footer .developer-wordmark { width: 228px; }
+  .home-information-footer .site-links { font-size: 15px; gap: 3px 13px; }
+}
