@@ -21,6 +21,7 @@ export default function TutorialCoach({ step, feedback = '' }: { step: CoachingS
     let target: HTMLElement | null = null;
     let previousDescription: string | null = null;
     let movedIntoView = false;
+    let lastViewportSize = '';
     const viewport = window.visualViewport;
     const observer = new ResizeObserver(() => schedule());
     if (panel.current) observer.observe(panel.current);
@@ -47,6 +48,8 @@ export default function TutorialCoach({ step, feedback = '' }: { step: CoachingS
         left: viewport?.offsetLeft ?? 0, top: viewport?.offsetTop ?? 0,
         width: viewport?.width ?? window.innerWidth, height: viewport?.height ?? window.innerHeight,
       };
+      const sizeKey = `${view.width}:${view.height}`;
+      if (lastViewportSize !== sizeKey) { lastViewportSize = sizeKey; movedIntoView = false; }
       let box = element.getBoundingClientRect();
       if (!movedIntoView) {
         movedIntoView = true;
