@@ -17,8 +17,10 @@ import './developer-credit.css';
 import './monetization.css';
 import './store.css';
 import './install.css';
+import './home-information.css';
 import { fontCssUrl } from '../lib/store-catalog';
 import InstallSupport from './components/InstallSupport';
+import HomeInformation from './components/HomeInformation';
 
 export const metadata: Metadata = {
   title: 'Parkes Rummy',
@@ -40,6 +42,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <link rel="stylesheet" href={fontCssUrl()}/>
       <script async src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_VERIFICATION_CLIENT}`} crossOrigin="anonymous"/>
     </head>
-    <body><InstallSupport>{children}</InstallSupport></body>
+    <body><InstallSupport>{children}<HomeInformation/></InstallSupport></body>
   </html>;
 }
