@@ -128,8 +128,11 @@
   .tutorial-app .tutorial-settings-trigger,
   .tutorial-app .tutorial-exit { min-width: 42px; min-height: 42px; padding: 9px; }
   .tutorial-app .tutorial-rules-trigger > span,
-  .tutorial-app .tutorial-settings-trigger > span,
   .tutorial-app .tutorial-exit > span { display: none; }
+  .tutorial-app .tutorial-settings-trigger > span {
+    position: absolute; width: 1px; height: 1px; margin: -1px;
+    padding: 0; border: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap;
+  }
   .practice-coach-layer .practice-coach { padding: 15px 16px; }
   .practice-coach .practice-coach-title { font-size: 20px; }
   .practice-coach .practice-coach-body { font-size: 16px; }
