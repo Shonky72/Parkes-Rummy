@@ -46,7 +46,7 @@ export default function HomeInformation() {
           - parseFloat(style.paddingTop || '0') - parseFloat(style.rowGap || '0')
           - footerHeight - 18;
         // No shrink-to-fit fonts or reordered forms. Short windows scroll the tab body.
-        height = Math.max(520, Math.floor(space));
+        height = Math.max(480, Math.floor(space));
       }
       const value = `${height}px`;
       if (home.style.getPropertyValue('--home-panel-height') !== value) {
