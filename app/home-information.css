@@ -52,6 +52,8 @@ body:has(.home-information-footer) .developer-footer { display: none; }
 .parkes-app > .home-main > .start-panel > h2,
 .parkes-app > .home-main > .start-panel > .account-controls,
 .parkes-app > .home-main > .start-panel > .home-play-tabs { flex-shrink: 0; }
+.parkes-app > .home-main > .start-panel > .account-controls { margin-bottom: 16px; }
+.parkes-app > .home-main > .start-panel > .home-play-tabs { margin: -7px 0 20px; }
 .parkes-app > .home-main > .start-panel > .home-tab-content {
   flex: 1 1 0;
   min-height: 0;
@@ -60,7 +62,7 @@ body:has(.home-information-footer) .developer-footer { display: none; }
   overflow-x: hidden;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: #71867460 transparent;
+  scrollbar-color: #71867499 transparent;
   overscroll-behavior-y: contain;
   overflow-anchor: none;
   padding-right: 5px;
@@ -71,7 +73,7 @@ body:has(.home-information-footer) .developer-footer { display: none; }
 @media (min-width: 851px) {
   .parkes-app > .home-main:has(> .home-information-footer) {
     /* Set from viewport, header and footer geometry, never from active content. */
-    grid-template-rows: var(--home-panel-height, max(520px, calc(100svh - 244px))) auto auto;
+    grid-template-rows: var(--home-panel-height, max(480px, calc(100svh - 244px))) auto;
   }
   .parkes-app > .home-main > .home-hero {
     grid-column: 1;
@@ -85,7 +87,7 @@ body:has(.home-information-footer) .developer-footer { display: none; }
 }
 @media (max-width: 850px) {
   .parkes-app > .home-main:has(> .home-information-footer) {
-    grid-template-rows: auto var(--home-panel-height, 940px) auto auto;
+    grid-template-rows: auto var(--home-panel-height, 940px) auto;
   }
   .parkes-app > .home-main > .home-hero { grid-column: 1; grid-row: 1; }
   .parkes-app > .home-main > .start-panel { grid-column: 1; grid-row: 2; }
