@@ -21,7 +21,7 @@ function fixture(quick=false) {
  room.melds=[{id:'grow-run',ownerId:'human',kind:'run',constraint:'any',cards:Array.from({length:9},(_,i)=>({id:`run-${i}`,rank:i+5,suit:'H'}))},{id:'same-rank',ownerId:'human',kind:'set',constraint:'any',cards:Array.from({length:6},(_,i)=>({id:`set-${i}`,rank:7,suit:'D'}))},{id:'closed-run',ownerId:room.players[1].id,kind:'run',constraint:'any',cards:Array.from({length:10},(_,i)=>({id:`closed-${i}`,rank:i+5,suit:'S'}))}];
  room.players[1].down=true;return room;
 }
-const rects=page=>page.evaluate(()=>Object.fromEntries(['.game-header','.your-hand','.hand-status','.hand-draw-piles','.hand-layout','.hand-actions'].map(s=>{const r=document.querySelector(s).getBoundingClientRect();return[s,{x:r.x,y:r.y,width:r.width,height:r.height}];})));
+const rects=page=>page.evaluate(()=>Object.fromEntries(['.game-header','.your-hand','.hand-status','.hand-draw-piles','.table-sidebar>.draw-section','.hand-layout','.hand-actions'].flatMap(s=>{const el=document.querySelector(s);if(!el)return[];const r=el.getBoundingClientRect();return[[s,{x:r.x,y:r.y,width:r.width,height:r.height}]];})));
 function equalGeometry(a,b,label){for(const s of Object.keys(a))for(const k of ['x','y','width','height'])assert.ok(Math.abs(a[s][k]-b[s][k])<1,`${label} moved ${s}.${k}: ${a[s][k]} -> ${b[s][k]}`);}
 async function mock(context,quick=false){let room=fixture(quick);const actions=[];await context.route('**/*',async route=>{
  const u=new URL(route.request().url());if(u.origin!==new URL(base).origin)return route.abort();
@@ -33,8 +33,18 @@ async function mock(context,quick=false){let room=fixture(quick);const actions=[
   return route.fulfill({json:{room:publicRoom(room,'human'),token:'account:table-user'}});
  }
  return route.continue();});return {actions,getRoom:()=>room};}
+async function auditBadge(){
+ const audit=await browser.newContext({viewport:{width:390,height:844}});const publicPage=await audit.newPage();
+ await publicPage.route('**/*',route=>route.request().method()!=='GET'||/googlesyndication|doubleclick|google-analytics/.test(route.request().url())?route.abort():route.continue());
+ try{await publicPage.goto('https://parkesrummy.com/',{waitUntil:'domcontentloaded',timeout:20000});await pause(2200);
+ const frames=await publicPage.locator('iframe').evaluateAll(es=>es.map(e=>({id:e.id,title:e.title,src:e.getAttribute('src'),style:e.getAttribute('style'),parentId:e.parentElement?.id,parentClass:e.parentElement?.className,sandbox:e.getAttribute('sandbox')})));
+ const nodes=await publicPage.locator('[id*="netlify"],[class*="netlify"]').evaluateAll(es=>es.map(e=>e.outerHTML.slice(0,1800)));
+ await writeFile(`${output}/netlify-frames.json`,JSON.stringify({frames,nodes},null,2));await publicPage.screenshot({path:`${output}/public-badge.png`});
+ }catch(e){await writeFile(`${output}/badge-audit-note.txt`,String(e));}await audit.close();
+}
 try{
  let ready=false;for(let i=0;i<90;i++){try{ready=(await fetch(base)).ok;}catch{}if(ready)break;await pause(1000);}assert.ok(ready);browser=await chromium.launch({headless:true});
+ await auditBadge();
  for(const size of [{name:'phone',width:390,height:844},{name:'small-phone',width:320,height:568},{name:'desktop',width:1440,height:900}]){
   const context=await browser.newContext({viewport:size,isMobile:size.width<800,hasTouch:size.width<800,reducedMotion:'reduce'});page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));const state=await mock(context);
   await page.goto(`${base}/join/QUIK`,{waitUntil:'networkidle'});await page.locator('.adaptive-meld').first().waitFor();await pause(250);
@@ -42,13 +52,14 @@ try{
   assert.equal(await page.locator('[data-meld-id="closed-run"].adaptive-meld [data-meld-target]').count(),0);
   const overflow=await page.locator('.player-melds,.adaptive-meld-cards,.meld-fan').evaluateAll(es=>es.filter(e=>e.scrollWidth>e.clientWidth+2).map(e=>({class:e.className,scroll:e.scrollWidth,width:e.clientWidth})));
   assert.deepEqual(overflow,[],`${size.name}: overflowing melds`);
-  // Shrinking the visible type back proves that enlarged letters do not resize surrounding controls.
   const large=await rects(page);const style=await page.addStyleTag({content:'.status-message-visible{font-size:9px!important}'});const small=await rects(page);equalGeometry(large,small,'Changing status font');await style.evaluate(e=>e.remove());
   assert.ok(await page.locator('.status-message-visible').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))>=14);
   await page.screenshot({path:`${output}/${size.name}-melds.png`,fullPage:true});
-  // The Ace completes the nine-card run. Pressing Add acknowledges the request before the delayed server reply.
   await page.locator('[data-hand-card="hand-0"]').click();
-  const target=page.locator('[data-meld-id="grow-run"].adaptive-meld [data-meld-end="end"]');await target.scrollIntoViewIfNeeded();
+  const target=page.locator('[data-meld-id="grow-run"].adaptive-meld [data-meld-end="end"]');
+  // Put the target above the fixed hand before measuring. Playwright otherwise
+  // scrolls again while clicking a target hidden behind that dock on short phones.
+  await target.evaluate(e=>{e.scrollIntoView({block:'start',behavior:'instant'});window.scrollBy(0,-12);});await pause(100);
   const before=await rects(page);await target.click();await page.locator('.action-status-message[data-pending=true]').waitFor({timeout:500});
   assert.match(await page.locator('.status-message-visible').textContent(),/Adding/);equalGeometry(before,await rects(page),'Pending request');
   await page.locator('[data-meld-id="grow-run"].adaptive-meld .complete-run-stack').waitFor({timeout:5000});
@@ -60,11 +71,7 @@ try{
  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,reducedMotion:'reduce'});page=await context.newPage();await mock(context,true);
  await page.goto(`${base}/join/QUIK`,{waitUntil:'networkidle'});await page.locator('[data-hand-card="hand-0"]').click();await page.locator('.hand-actions>.button').filter({hasText:'Discard'}).click();await page.locator('.quick-result-actions').waitFor({timeout:15000});
  assert.equal(await page.getByRole('button',{name:'Rematch',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:/Deal hand/}).count(),0);await page.screenshot({path:`${output}/quick-final.png`,fullPage:true});
- await page.getByRole('button',{name:'New Quick Play',exact:true}).click();await page.locator('.game-header').waitFor();await context.close();
- // Read-only visitor audit identifies injected Netlify UI. Block ads and all writes.
- const audit=await browser.newContext({viewport:{width:390,height:844}});const publicPage=await audit.newPage();
- await publicPage.route('**/*',route=>route.request().method()!=='GET'||/googlesyndication|doubleclick|google-analytics/.test(route.request().url())?route.abort():route.continue());
- try{await publicPage.goto('https://parkesrummy.com/',{waitUntil:'domcontentloaded',timeout:20000});await pause(2000);const frames=await publicPage.locator('iframe').evaluateAll(es=>es.map(e=>({id:e.id,title:e.title,src:e.getAttribute('src'),style:e.getAttribute('style'),parent:e.parentElement?.outerHTML.slice(0,1400)})));await writeFile(`${output}/netlify-frames.json`,JSON.stringify(frames,null,2));await publicPage.screenshot({path:`${output}/public-badge.png`});}catch(e){await writeFile(`${output}/badge-audit-note.txt`,String(e));}await audit.close();
+ await page.getByRole('button',{name:'New Quick Play',exact:true}).click();await page.locator('.quick-result-actions').waitFor({state:'hidden'});await page.locator('.game-header').waitFor();await context.close();
  await writeFile(`${output}/checks.json`,JSON.stringify({results,quickFinal:true},null,2));console.log(JSON.stringify(results));
 }catch(error){await writeFile(`${output}/checks.json`,JSON.stringify({results,error:String(error)},null,2));try{await page?.screenshot({path:`${output}/failure.png`,fullPage:true});}catch{}throw error;}
 finally{await browser?.close();server?.kill('SIGTERM');log.end();}
