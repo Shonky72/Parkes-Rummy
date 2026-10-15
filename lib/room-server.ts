@@ -8,6 +8,7 @@ import { chooseQuickPlaySetup } from './quick-play';
 import { advanceBotTurn } from './bot-turn';
 import { isRoomCode, normalizeRoomCode, ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from './room-code';
 import { ROOM_PROTOCOL, ROOM_PROTOCOL_HEADER, ROOM_UPDATE_MESSAGE } from './room-protocol';
+import { isAllowedRoomWriteOrigin } from './request-origin';
 import type { Difficulty, GameAction, PlayerState, RoomState, RoomSummary, RoomSummaryResult } from './types';
 
 class ApiError extends Error {
@@ -26,7 +27,7 @@ function requireCurrentProtocol(request: Request) {
   if (request.headers.get(ROOM_PROTOCOL_HEADER) !== ROOM_PROTOCOL) throw new ApiError(ROOM_UPDATE_MESSAGE, 426);
 }
 function requireSameOrigin(request: Request) {
-  if (request.headers.get('Origin') !== new URL(request.url).origin || request.headers.get('Sec-Fetch-Site') === 'cross-site') {
+  if (!isAllowedRoomWriteOrigin(request)) {
     throw new ApiError('Open this game directly to continue.', 403);
   }
 }
