@@ -14,7 +14,6 @@ export default function HomeInformation() {
       frame = 0;
       const main = document.querySelector<HTMLElement>('.parkes-app > .home-main');
       setHome(old => old === main ? old : main);
-      // Keyboard users also need access to the same independent scroll region.
       const content = main?.querySelector<HTMLElement>('.start-panel > .home-tab-content');
       if (content) {
         content.tabIndex = 0;
@@ -45,13 +44,12 @@ export default function HomeInformation() {
         const space = document.documentElement.clientHeight - top
           - parseFloat(style.paddingTop || '0') - parseFloat(style.rowGap || '0')
           - footerHeight - 18;
-        // No shrink-to-fit fonts or reordered forms. Short windows scroll the tab body.
-        height = Math.max(480, Math.floor(space));
+        // Keep the original readable layout. On very short windows allow page
+        // overflow rather than shrinking text, moving labels or hiding Quick Play.
+        height = Math.max(640, Math.floor(space));
       }
       const value = `${height}px`;
-      if (home.style.getPropertyValue('--home-panel-height') !== value) {
-        home.style.setProperty('--home-panel-height', value);
-      }
+      if (home.style.getPropertyValue('--home-panel-height') !== value) home.style.setProperty('--home-panel-height', value);
     }
     function schedule() { if (!frame) frame = requestAnimationFrame(measure); }
     const observer = new ResizeObserver(schedule);
@@ -68,8 +66,7 @@ export default function HomeInformation() {
   }, [home]);
 
   return home ? createPortal(
-    <footer ref={footer} className="home-information-footer" aria-label="About Parkes Rummy and player information">
-      <DeveloperCredit/>
-    </footer>, home, 'home-information-footer',
+    <footer ref={footer} className="home-information-footer" aria-label="About Parkes Rummy and player information"><DeveloperCredit/></footer>,
+    home, 'home-information-footer',
   ) : null;
 }
