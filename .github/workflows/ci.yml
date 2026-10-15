@@ -18,7 +18,7 @@ jobs:
           node-version: 24
       - run: npm install
       - run: npm run typecheck
-      - run: node --import tsx --test tests/original-rules.test.ts tests/tutorial.test.ts tests/quick-play.test.ts tests/tutorial-coaching.test.ts tests/phone-install.test.ts tests/bot-turn.test.ts tests/bot-turn-api.test.ts tests/rummy.test.ts tests/rule-progression.test.ts tests/draw-card-drag.test.ts tests/meld-layout.test.ts
+      - run: node --import tsx --test tests/original-rules.test.ts tests/tutorial.test.ts tests/quick-play.test.ts tests/tutorial-coaching.test.ts tests/phone-install.test.ts tests/bot-turn.test.ts tests/bot-turn-api.test.ts tests/rummy.test.ts tests/rule-progression.test.ts tests/draw-card-drag.test.ts tests/meld-layout.test.ts tests/request-origin.test.ts
       - run: node --import tsx --test --test-name-pattern="Quick Play starts an atomic game" tests/account-api.test.ts
       - run: npm run build
       - name: Install browser test tools
