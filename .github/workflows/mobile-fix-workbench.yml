@@ -1,0 +1,27 @@
+name: Mobile fix workbench
+on:
+  push:
+    branches: [fix/mobile-play-and-ai-turns]
+    paths: [.github/workflows/mobile-fix-workbench.yml, scripts/mobile-fix-patch.py]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: |
+          mkdir -p mobile-source
+          git archive HEAD | tar -x -C mobile-source
+          rm -rf mobile-source/.github mobile-source/public/music
+          grep -RInE 'touch-action|touchmove|preventDefault|Opening your table|paceBots|botStep' app lib > mobile-source/touch-audit.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobile-source
+          path: mobile-source/
+          include-hidden-files: true
+          retention-days: 1
