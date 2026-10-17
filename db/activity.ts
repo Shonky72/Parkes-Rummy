@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import { createHash } from 'node:crypto';
 import { database, type SqlDatabase } from './index';
 import type { RoomState } from '../lib/types';
@@ -43,7 +44,7 @@ export class ActivityRepository {
       INSERT INTO activity_presence(session_key,actor_key,user_id,guest_name,room_code,place,last_seen)
       VALUES($2,$3,$4,$5,$6,$7,$1)
       ON CONFLICT(session_key) DO UPDATE SET guest_name=EXCLUDED.guest_name,room_code=EXCLUDED.room_code,place=EXCLUDED.place,last_seen=EXCLUDED.last_seen
-      WHERE activity_presence.last_seen <= $1-20000 OR activity_presence.place<>EXCLUDED.place OR activity_presence.room_code IS DISTINCT FROM EXCLUDED.room_code
+      WHERE activity_presence.last_seen <= $1::bigint-20000 OR activity_presence.place<>EXCLUDED.place OR activity_presence.room_code IS DISTINCT FROM EXCLUDED.room_code
       RETURNING actor_key,place
     ), daily AS (
       INSERT INTO activity_daily_players(day,actor_key,user_id,first_seen,last_seen)
@@ -75,9 +76,9 @@ export class ActivityRepository {
     if (now < this.nextCleanup) return;
     this.nextCleanup = now + 300_000;
     // At most once per five minutes globally, not once per request or worker.
-    const claimed = await this.db.query('UPDATE activity_meta SET cleaned_at=$1 WHERE id=1 AND cleaned_at<$1-300000 RETURNING id',[now]);
+    const claimed = await this.db.query('UPDATE activity_meta SET cleaned_at=$1 WHERE id=1 AND cleaned_at<$1::bigint-300000 RETURNING id',[now]);
     if (!claimed.rowCount) return;
-    await this.db.query(`WITH a AS (DELETE FROM activity_presence WHERE last_seen<$1-86400000),
+    await this.db.query(`WITH a AS (DELETE FROM activity_presence WHERE last_seen<$1::bigint-86400000),
       b AS (DELETE FROM activity_daily_players WHERE day<${daySql}-29),
       c AS (DELETE FROM activity_game_starts WHERE day<${daySql}-29)
       DELETE FROM activity_daily_peaks WHERE day<${daySql}-29`,[now]);
@@ -127,5 +128,9 @@ export class ActivityRepository {
 export const activityRepository = new ActivityRepository();
 /** Only used after a newly started game was saved successfully. Never fail gameplay for analytics. */
 export async function recordActivityGameStart(room: RoomState): Promise<void> {
-  try { await activityRepository.gameStarted(room); } catch { console.warn('Activity statistics temporarily unavailable'); }
+  try {
+    after(async () => {
+      try { await activityRepository.gameStarted(room); } catch { console.warn('Activity statistics temporarily unavailable'); }
+    });
+  } catch { /* Direct engine tests have no HTTP lifecycle. Never block or fail a game response for telemetry. */ }
 }

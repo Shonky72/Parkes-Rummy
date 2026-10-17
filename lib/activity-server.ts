@@ -19,7 +19,7 @@ export async function isActivityOwner(user:AccountUser|null, db:SqlDatabase=data
   if (!user || user.email.trim().toLowerCase() !== ACTIVITY_OWNER_EMAIL) return false;
   const result = await db.query(`SELECT u.id FROM "user" u WHERE u.id=$1 AND lower(trim(u.email))=$2 AND u."emailVerified"=true
     AND EXISTS(SELECT 1 FROM "account" a WHERE a."userId"=u.id AND a."providerId"='google') LIMIT 1`,[user.id,ACTIVITY_OWNER_EMAIL]);
-  return result.rowCount === 1;
+  return result.rows.length === 1;
 }
 export function createActivityHandlers(options:{resolveSession?:Resolver; db?:SqlDatabase; activity?:ActivityRepository; rooms?:RoomRepository}={}) {
   const resolve = options.resolveSession??resolveAccountUser;
