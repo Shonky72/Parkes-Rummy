@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 
 /**
- * Read-only smoke probe for the Netlify Next.js route handler.
- * All requests use text/plain, rejected before any room write or DB access.
- * This verifies the actual browser Origin and Netlify's internal URL handling.
+ * Safe smoke probes for the Netlify Next.js route handler.
+ * Game POSTs use text/plain, rejected before any room write or DB access.
+ * Activity probes are anonymous reads and must not expose private data.
  */
 const pull = process.env.NETLIFY_PR_NUMBER;
 if (!pull || !/^\d+$/.test(pull)) throw new Error('NETLIFY_PR_NUMBER is required.');
@@ -47,5 +47,13 @@ try {
   });
   assert.equal(forbidden.status, 403, 'External Origin was not blocked');
 
-  console.log('Netlify preview Origin verified:', { sameOriginStatus: sameOrigin.status, canonicalOriginStatus: canonicalOrigin.status, crossSiteStatus: forbidden.status });
+  const activity = await fetch(base + '/api/admin/activity');
+  assert.equal(activity.status, 401, 'Anonymous activity access must be denied');
+  assert.match(activity.headers.get('cache-control') || '', /no-store/);
+  assert.ok(!('players' in await activity.json()), 'No player data in denied responses');
+  const deniedPage = await (await fetch(base + '/admin/activity')).text();
+  assert.ok(deniedPage.includes('Owner access required'), 'Server page must deny anonymous access');
+  assert.ok(!deniedPage.includes('People online'), 'Private dashboard is not server-rendered for guests');
+  assert.equal((await fetch(base + '/activity-ui-fixture')).status, 404, 'CI-only fixture must never ship to Netlify');
+  console.log('Netlify preview verified:', { sameOriginStatus: sameOrigin.status, canonicalOriginStatus: canonicalOrigin.status, crossSiteStatus: forbidden.status, privateActivityStatus: activity.status, fixtureAbsent: true });
 } finally { await browser.close(); }
