@@ -1,0 +1,41 @@
+name: Owner activity workbench
+on:
+  push:
+    branches: [feature/private-owner-activity]
+    paths: [.github/workflows/owner-activity-workbench.yml, scripts/apply-owner-activity.py, scripts/finalize-owner-activity.py]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/private-owner-activity
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Apply reviewed integrations
+        run: |
+          python scripts/apply-owner-activity.py
+          python scripts/finalize-owner-activity.py
+          git add app/components/ParkesApp.tsx lib/room-server.ts app/privacy/page.tsx app/cookies/page.tsx tests/activity.test.ts db/activity.ts .github/workflows/ci.yml
+          if ! git diff --cached --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'Integrate private activity collection, owner Settings access and transparent retention notices'
+            git push origin HEAD:feature/private-owner-activity
+          fi
+      - run: npm install
+      - run: npm run typecheck
+      - run: node --import tsx --test tests/activity.test.ts
+      - name: Export source for review
+        if: always()
+        run: git archive HEAD -o /tmp/owner-activity-source.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owner-activity-source
+          path: /tmp/owner-activity-source.zip
+          retention-days: 1
