@@ -1,3 +1,4 @@
+// Page readiness is checked by the existing UI locators below. Foreground presence is periodic network traffic.
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
@@ -50,7 +51,7 @@ try {
       if (url.pathname === '/api/account/session') return route.fulfill({ json: account });
       return route.continue();
     });
-    await page.goto(base, { waitUntil: 'networkidle' });
+    await page.goto(base, { waitUntil: 'domcontentloaded' });
     const shortcut = page.locator('.home-header .install-phone-shortcut');
     await shortcut.waitFor({ state: 'visible' });
     assert.equal(await page.locator('.home-tab-content .install-phone-shortcut').count(), 0, 'Install is not a primary play action');
@@ -103,7 +104,7 @@ try {
     assert.equal(await page.locator('.settings-install-entry').count(), 1);
     await page.locator('.settings-install-entry a').click();
     await page.waitForURL('**/install');
-    await page.goto(base, { waitUntil: 'networkidle' });
+    await page.goto(base, { waitUntil: 'domcontentloaded' });
     await page.locator('.home-header').waitFor();
     assert.equal(await page.locator('.install-phone-shortcut').count(), 0, 'Seen state survives a fresh page load');
     assert.deepEqual(errors, [], `Browser errors ${screen.name}`);

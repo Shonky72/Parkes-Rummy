@@ -1,3 +1,4 @@
+// Page readiness is checked by the existing UI locators below. Foreground presence is periodic network traffic.
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
@@ -61,7 +62,7 @@ try {
   for(const signed of [true,false]) {
    const context=await browser.newContext({viewport:screen,isMobile:true,hasTouch:true,reducedMotion:'reduce'});
    const page=await context.newPage();currentPage=page;const errors=[];page.on('pageerror',e=>errors.push(e.message));
-   await routes(page,signed);await page.goto(base,{waitUntil:'networkidle'});await page.locator('.quick-play-button').waitFor();await pause(150);
+   await routes(page,signed);await page.goto(base,{waitUntil:'domcontentloaded'});await page.locator('.quick-play-button').waitFor();await pause(150);
    const create=await page.locator('.create-button').boundingBox(),quick=await page.locator('.quick-play-button').boundingBox();
    await page.screenshot({path:`${output}/${screen.name}-${signed?'account':'guest'}-home.png`});
    assert.ok(create.y>=0&&quick.y+quick.height<=screen.height,`${screen.name}/${signed}: main actions below fold ${JSON.stringify({create,quick})}`);
@@ -78,7 +79,7 @@ try {
   }
   const context=await browser.newContext({viewport:screen,isMobile:true,hasTouch:true,reducedMotion:'reduce'});
   const page=await context.newPage();currentPage=page;const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  const actions=await routes(page,true,true);await page.goto(`${base}/join/TNFG`,{waitUntil:'networkidle'});
+  const actions=await routes(page,true,true);await page.goto(`${base}/join/TNFG`,{waitUntil:'domcontentloaded'});
   await page.locator('.game-header').waitFor();await page.evaluate(()=>scrollTo(0,0));await pause(150);
   const targets=['.game-header>.brand','.header-room-code','.exit-game-button','.game-header [aria-label="Voice chat"]','.game-header [aria-label="Settings"]','.game-header>.table-tabs','.game-header .game-pill'];
   const boxes=[];for(const sel of targets){const r=await page.locator(sel).boundingBox();assert.ok(r,sel);boxes.push(r);assert.ok(r.x>=-1&&r.x+r.width<=screen.width+1,`${sel} clipped`);}

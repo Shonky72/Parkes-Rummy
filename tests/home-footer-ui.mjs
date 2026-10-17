@@ -1,3 +1,4 @@
+// Page readiness is checked by the existing UI locators below. Foreground presence is periodic network traffic.
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
@@ -60,7 +61,7 @@ try {
       if (url.pathname === '/api/account/games') return route.fulfill({ json: { games: [] } });
       return route.continue();
     });
-    await page.goto(base, { waitUntil: 'networkidle' });
+    await page.goto(base, { waitUntil: 'domcontentloaded' });
     await page.locator('.home-information-footer').waitFor({ state: 'visible' });
     await page.waitForTimeout(200);
     const shell = await geometry(page);
@@ -136,7 +137,7 @@ try {
     await link.scrollIntoViewIfNeeded();
     assert.equal(await link.evaluate(el => { const r = el.getBoundingClientRect(); const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2); return hit === el || el.contains(hit); }), true);
     results.push({ ...item, ...info, stableAcrossAllTabs: true, isolatedScrolling: true });
-    await page.goto(`${base}/tutorial`, { waitUntil: 'networkidle' });
+    await page.goto(`${base}/tutorial`, { waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('.home-information-footer').count(), 0);
     assert.deepEqual(errors, [], `${item.name}: page errors`);
     await context.close();
