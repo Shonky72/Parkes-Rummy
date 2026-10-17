@@ -21,7 +21,7 @@ export default function ActivityPresence({roomCode,token,name,accountId}:{roomCo
   const tabId=useRef('');
   const guestId=useRef('');
   useEffect(()=>{
-    if (!tabId.current) tabId.current=crypto.randomUUID();
+    tabId.current=crypto.randomUUID();
     if (!guestId.current) guestId.current=guestIdentity();
     let disposed=false,timer:ReturnType<typeof setTimeout>|undefined,failures=0,inFlight=false;
     let controller:AbortController|null=null;

@@ -9,6 +9,7 @@ import { advanceBotTurn } from './bot-turn';
 import { isRoomCode, normalizeRoomCode, ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from './room-code';
 import { ROOM_PROTOCOL, ROOM_PROTOCOL_HEADER, ROOM_UPDATE_MESSAGE } from './room-protocol';
 import { isAllowedRoomWriteOrigin } from './request-origin';
+import { recordActivityGameStart } from '../db/activity';
 import type { Difficulty, GameAction, PlayerState, RoomState, RoomSummary, RoomSummaryResult } from './types';
 
 class ApiError extends Error {
@@ -224,7 +225,10 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
           for (const difficulty of quickPlay.difficulties) room = applyAction(room, host.id, { type: 'addBot', difficulty });
           room = applyAction(room, host.id, { type: 'start' });
         }
-        if (await repository.insert(room, membership)) return reply({ room: publicRoom(room, host.id), token }, 201);
+        if (await repository.insert(room, membership)) {
+          if (quickPlay) await recordActivityGameStart(room);
+          return reply({ room: publicRoom(room, host.id), token }, 201);
+        }
       }
       throw new ApiError('A room code is taking a moment. Please try again.', 503);
     }),
@@ -350,6 +354,7 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
         if (!next.players.some(candidate => !candidate.isBot)) {
           if (await repository.delete(code, version)) return reply({ room: null, left: true });
         } else if (await repository.save(next, version, undefined, { membershipUnchanged: next.players.length === room.players.length && next.players.every(p => room.players.some(old => old.id === p.id && old.isBot === p.isBot)) })) {
+          if (action.type === 'start') await recordActivityGameStart(next);
           const stillPresent = next.players.some(candidate => candidate.id === player.id);
           return reply({ room: stillPresent ? publicRoom(next, player.id) : null, left: !stillPresent });
         }

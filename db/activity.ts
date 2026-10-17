@@ -25,6 +25,7 @@ export interface PresenceRecord { sessionKey: string; actorKey: string; userId: 
 export class ActivityRepository {
   private ready: Promise<void> | null = null;
   private retryAfter = 0;
+  private nextCleanup = 0;
   constructor(private readonly db: SqlDatabase = database) {}
   async ensure(now = Date.now()): Promise<void> {
     if (now < this.retryAfter) throw new Error('Activity storage is temporarily unavailable');
@@ -42,14 +43,14 @@ export class ActivityRepository {
       INSERT INTO activity_presence(session_key,actor_key,user_id,guest_name,room_code,place,last_seen)
       VALUES($2,$3,$4,$5,$6,$7,$1)
       ON CONFLICT(session_key) DO UPDATE SET guest_name=EXCLUDED.guest_name,room_code=EXCLUDED.room_code,place=EXCLUDED.place,last_seen=EXCLUDED.last_seen
-      WHERE activity_presence.last_seen <= $1-1000 OR activity_presence.place<>EXCLUDED.place OR activity_presence.room_code IS DISTINCT FROM EXCLUDED.room_code
+      WHERE activity_presence.last_seen <= $1-20000 OR activity_presence.place<>EXCLUDED.place OR activity_presence.room_code IS DISTINCT FROM EXCLUDED.room_code
       RETURNING actor_key,place
     ), daily AS (
       INSERT INTO activity_daily_players(day,actor_key,user_id,first_seen,last_seen)
       SELECT ${daySql},$3,$4,$1,$1 FROM touched
       ON CONFLICT(day,actor_key) DO UPDATE SET last_seen=GREATEST(activity_daily_players.last_seen,EXCLUDED.last_seen)
     ), current_people AS (
-      SELECT actor_key,place FROM activity_presence WHERE last_seen>$1-$8 AND session_key<>$2
+      SELECT actor_key,place FROM activity_presence WHERE last_seen>$1::bigint-$8::bigint AND session_key<>$2
       UNION ALL SELECT $3::text,$7::text
     ) INSERT INTO activity_daily_peaks(day,online,playing)
       SELECT ${daySql},count(DISTINCT actor_key)::integer,count(DISTINCT actor_key) FILTER(WHERE place='playing')::integer FROM current_people
@@ -71,6 +72,8 @@ export class ActivityRepository {
     [event.at,activityHash(`${room.code}:${room.createdAt}:${event.id}`),!!room.quickPlay]);
   }
   private async cleanup(now: number) {
+    if (now < this.nextCleanup) return;
+    this.nextCleanup = now + 300_000;
     // At most once per five minutes globally, not once per request or worker.
     const claimed = await this.db.query('UPDATE activity_meta SET cleaned_at=$1 WHERE id=1 AND cleaned_at<$1-300000 RETURNING id',[now]);
     if (!claimed.rowCount) return;
@@ -88,7 +91,7 @@ export class ActivityRepository {
         COALESCE(u.name,max(p.guest_name)) AS name,u.email,
         CASE WHEN bool_or(p.place='playing') THEN 'playing' WHEN bool_or(p.place='lobby') THEN 'lobby' WHEN bool_or(p.place='results') THEN 'results' ELSE 'home' END AS place,
         array_remove(array_agg(DISTINCT p.room_code),NULL) AS rooms,max(p.last_seen) AS last_seen
-        FROM activity_presence p LEFT JOIN "user" u ON u.id=p.user_id WHERE p.last_seen>$1-$2
+        FROM activity_presence p LEFT JOIN "user" u ON u.id=p.user_id WHERE p.last_seen>$1::bigint-$2::bigint
         GROUP BY p.actor_key,p.user_id,u.name,u.email ORDER BY max(p.last_seen) DESC`,[now,ACTIVITY_ONLINE_MS]),
       this.db.query<{day:string;players:string;signed_in:string;guests:string;games_started:string;peak_online:number;peak_playing:number}>(`WITH days AS (
         SELECT generate_series(GREATEST(${daySql}-29,(SELECT (to_timestamp(started_at::double precision/1000) AT TIME ZONE 'Australia/Sydney')::date FROM activity_meta WHERE id=1)),${daySql},'1 day')::date AS day

@@ -76,7 +76,7 @@ test('presence requires authoritative game membership and ignores spoofed user, 
   assert.equal((await API(null).pulse(req(pulse,'guest','x'.repeat(64)))).status,403);
   assert.equal((await API(other).pulse(req(pulse,'account:other',bearer))).status,403);
   assert.equal((await API(null).pulse(req(pulse,'account:owner',bearer))).status,401);
-  assert.equal((await API(null).pulse(req(pulse,'guest',bearer,'https://evil.test')))).status,403);
+  assert.equal((await API(null).pulse(req(pulse,'guest',bearer,'https://evil.test'))).status,403);
   const result=await API(null).pulse(req(pulse,'guest',bearer));assert.equal(result.status,204);
   const data=await activity.snapshot();assert.equal(data.players.filter(p=>p.guest).length,1);assert.equal(data.players.find(p=>p.guest)?.email,null);
   assert.equal((await API(null).pulse(req({...pulse,visible:false},'guest',bearer))).status,204);
