@@ -36,10 +36,26 @@ try{
  await page.goto(base);await page.locator('.home-header').waitFor();for(let n=0;n<20&&!pulses.length;n++)await wait(100);
  assert.ok(pulses.some(p=>p.visible));assert.ok(pulses.every(p=>!('email' in p)&&!('userId' in p)));
  await page.locator('.home-settings').click();assert.equal(await page.getByRole('link',{name:'Owner activity dashboard'}).count(),0,'Guest sees no owner shortcut');
+ await wait(1200);assert.ok(pulses.filter(p=>p.visible).length<=2,'Presence must not run on every render');
  await page.evaluate(()=>{Object.defineProperty(document,'hidden',{get:()=>true,configurable:true});document.dispatchEvent(new Event('visibilitychange'));});await wait(200);
  assert.ok(pulses.some(p=>p.visible===false),'Hidden tab reports inactive');
  await context.close();
- await writeFile(`${out}/checks.json`,JSON.stringify({accessEndpoint:401,serverPageDenied:true,checks,foregroundPresence:true,samplesAreFictional:true},null,2));
+ const networkChecks=[];
+ for(const mocked of [false,true]){
+  const ctx=await browser.newContext({viewport:{width:390,height:844}});const p=await ctx.newPage();const pending=new Set(),events=[];let presence=0;
+  const record=(kind,r)=>{const path=new URL(r.url()).pathname;if(path.startsWith('/api/'))events.push({kind,path,at:Date.now()});};
+  p.on('request',r=>{pending.add(r);record('start',r);if(r.url().includes('/api/activity/presence'))presence++;});
+  p.on('requestfinished',r=>{pending.delete(r);record('finished',r);});
+  p.on('requestfailed',r=>{pending.delete(r);record('failed',r);});
+  await p.route('**/*',route=>{const u=new URL(route.request().url());if(u.origin!==base)return route.abort();if(u.pathname==='/api/account/session')return route.fulfill({json:{configured:true,user:{id:'network-probe',name:'Sample Player',email:'probe@example.test',image:null},entitlements:{},profile:{font:'default',symbol:'initials'},accessAdmin:false}});if(u.pathname==='/api/account/games')return route.fulfill({json:{games:[]}});if(mocked&&u.pathname==='/api/activity/presence')return route.fulfill({status:204});return route.continue();});
+  await p.goto(base,{waitUntil:'domcontentloaded'});await p.locator('.quick-play-button').waitFor();
+  let idle=true;try{await p.waitForLoadState('networkidle',{timeout:8000});}catch{idle=false;}
+  await wait(1200);
+  const result={mocked,idle,presence,pending:[...pending].map(r=>r.url()),events:events.slice(0,40)};networkChecks.push(result);console.log('Presence network probe',JSON.stringify(result));
+  assert.ok(presence<=3,'No presence request loop while game is visible');
+  await ctx.close();
+ }
+ await writeFile(`${out}/checks.json`,JSON.stringify({accessEndpoint:401,serverPageDenied:true,checks,foregroundPresence:true,samplesAreFictional:true,networkChecks},null,2));
  console.log('Owner dashboard UI and access checks passed',checks);
 }catch(error){try{await page?.screenshot({path:`${out}/failure.png`,fullPage:true});}catch{}throw error;}
 finally{await browser?.close();server.kill('SIGTERM');await rm('app/activity-ui-fixture',{recursive:true,force:true});}
