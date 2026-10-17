@@ -2,7 +2,7 @@ name: Owner activity workbench
 on:
   push:
     branches: [feature/private-owner-activity]
-    paths: [.github/workflows/owner-activity-workbench.yml, scripts/apply-owner-activity.py, scripts/finalize-owner-activity.py]
+    paths: [.github/workflows/owner-activity-workbench.yml]
 permissions:
   contents: write
 jobs:
@@ -16,15 +16,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Apply reviewed integrations
+      - name: Apply reviewed source integrations only
         run: |
           python scripts/apply-owner-activity.py
           python scripts/finalize-owner-activity.py
-          git add app/components/ParkesApp.tsx lib/room-server.ts app/privacy/page.tsx app/cookies/page.tsx tests/activity.test.ts db/activity.ts .github/workflows/ci.yml
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('db/activity.ts'); s=p.read_text();s=s.replace('$1-$2','$1::bigint-$2::bigint').replace('$1-$8','$1::bigint-$8::bigint');p.write_text(s)
+          p=Path('app/components/ActivityPresence.tsx');s=p.read_text().replace('if (!tabId.current) tabId.current=crypto.randomUUID();','tabId.current=crypto.randomUUID();');p.write_text(s)
+          PY
+          git restore .github/workflows/ci.yml
+          git add app/components/ParkesApp.tsx app/components/ActivityPresence.tsx lib/room-server.ts app/privacy/page.tsx app/cookies/page.tsx tests/activity.test.ts db/activity.ts
           if ! git diff --cached --quiet; then
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git commit -m 'Integrate private activity collection, owner Settings access and transparent retention notices'
+            git commit -m 'Integrate private activity presence, exact owner access and retention notices without changing gameplay'
             git push origin HEAD:feature/private-owner-activity
           fi
       - run: npm install
