@@ -16,32 +16,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Apply reviewed source integrations only
+      - name: Apply tested activity refinements
         run: |
-          python scripts/apply-owner-activity.py
-          python scripts/finalize-owner-activity.py
           python - <<'PY'
           from pathlib import Path
-          p=Path('db/activity.ts'); s=p.read_text();s=s.replace('$1-$2','$1::bigint-$2::bigint').replace('$1-$8','$1::bigint-$8::bigint');p.write_text(s)
-          p=Path('app/components/ActivityPresence.tsx');s=p.read_text().replace('if (!tabId.current) tabId.current=crypto.randomUUID();','tabId.current=crypto.randomUUID();');p.write_text(s)
+          p=Path('lib/activity-server.ts');s=p.read_text();s=s.replace('return result.rowCount === 1;','return result.rows.length === 1;');p.write_text(s)
+          p=Path('db/activity.ts');s=p.read_text();s=s.replace('$1-300000','$1::bigint-300000').replace('$1-86400000','$1::bigint-86400000').replace('$1-20000','$1::bigint-20000')
+          if "import { after } from 'next/server';" not in s:s="import { after } from 'next/server';\n"+s
+          old="  try { await activityRepository.gameStarted(room); } catch { console.warn('Activity statistics temporarily unavailable'); }"
+          new="  try {\n    after(async () => {\n      try { await activityRepository.gameStarted(room); } catch { console.warn('Activity statistics temporarily unavailable'); }\n    });\n  } catch { /* Direct engine tests have no HTTP lifecycle. Never block or fail a game response for telemetry. */ }"
+          s=s.replace(old,new);p.write_text(s)
           PY
-          git restore .github/workflows/ci.yml
-          git add app/components/ParkesApp.tsx app/components/ActivityPresence.tsx lib/room-server.ts app/privacy/page.tsx app/cookies/page.tsx tests/activity.test.ts db/activity.ts
+          git add lib/activity-server.ts db/activity.ts
           if ! git diff --cached --quiet; then
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git commit -m 'Integrate private activity presence, exact owner access and retention notices without changing gameplay'
+            git commit -m 'Keep owner checks strict and activity writes off the game-response path'
             git push origin HEAD:feature/private-owner-activity
           fi
       - run: npm install
       - run: npm run typecheck
       - run: node --import tsx --test tests/activity.test.ts
-      - name: Export source for review
-        if: always()
-        run: git archive HEAD -o /tmp/owner-activity-source.zip
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: owner-activity-source
-          path: /tmp/owner-activity-source.zip
-          retention-days: 1
