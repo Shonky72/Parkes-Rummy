@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {mkdir,writeFile} from 'node:fs/promises';
+import {mkdir,writeFile,rm} from 'node:fs/promises';
 import {spawn} from 'node:child_process';
 import {chromium} from 'playwright';
 const out='owner-activity-results';await mkdir(out,{recursive:true});
@@ -22,7 +22,7 @@ try{
   const context=await browser.newContext({viewport:{width,height},reducedMotion:'reduce'});page=await context.newPage();
   let revoked=false,reads=0;
   await page.route('**/*',route=>{const url=new URL(route.request().url());if(url.origin!==base)return route.abort();if(url.pathname==='/api/admin/activity'){reads++;return route.fulfill({status:revoked?403:200,json:revoked?{error:'Owner access required.'}:sample});}return route.continue();});
-  await page.goto(base+'/__activity_ui_fixture');await page.getByRole('heading',{name:"Who's at the tables?"}).waitFor();await page.getByText('player@example.test',{exact:true}).waitFor();
+  await page.goto(base+'/activity-ui-fixture');await page.getByRole('heading',{name:"Who's at the tables?"}).waitFor();await page.getByText('player@example.test',{exact:true}).waitFor();
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'Dashboard overflow '+name);
   await page.getByRole('textbox',{name:'Search players, emails or rooms'}).fill('Sample Guest');assert.equal(await page.getByText('player@example.test',{exact:true}).count(),0);assert.equal(await page.getByText('Sample Guest',{exact:true}).count(),1);
   await page.getByRole('textbox',{name:'Search players, emails or rooms'}).fill('');
@@ -31,7 +31,6 @@ try{
   assert.equal(await page.getByText('player@example.test',{exact:true}).count(),0,'Clear private data after access revocation');
   checks.push({name,width,noPageOverflow:true,privateDataCleared:true,reads});await context.close();
  }
- // Observe only synthetic guest presence traffic. No database or accounts are changed.
  const context=await browser.newContext({viewport:{width:390,height:844}});page=await context.newPage();const pulses=[];
  await page.route('**/*',route=>{const url=new URL(route.request().url());if(url.origin!==base)return route.abort();if(url.pathname==='/api/account/session')return route.fulfill({json:{configured:false,user:null,entitlements:{},profile:{font:'default',symbol:'initials'},accessAdmin:false}});if(url.pathname==='/api/activity/presence'){pulses.push(JSON.parse(route.request().postData()||'{}'));return route.fulfill({status:204});}return route.continue();});
  await page.goto(base);await page.locator('.home-header').waitFor();for(let n=0;n<20&&!pulses.length;n++)await wait(100);
@@ -43,4 +42,4 @@ try{
  await writeFile(`${out}/checks.json`,JSON.stringify({accessEndpoint:401,serverPageDenied:true,checks,foregroundPresence:true,samplesAreFictional:true},null,2));
  console.log('Owner dashboard UI and access checks passed',checks);
 }catch(error){try{await page?.screenshot({path:`${out}/failure.png`,fullPage:true});}catch{}throw error;}
-finally{await browser?.close();server.kill('SIGTERM');}
+finally{await browser?.close();server.kill('SIGTERM');await rm('app/activity-ui-fixture',{recursive:true,force:true});}
