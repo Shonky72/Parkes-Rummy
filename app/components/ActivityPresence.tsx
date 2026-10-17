@@ -13,16 +13,14 @@ function guestIdentity():string {
     return id;
   } catch { return crypto.randomUUID(); }
 }
-/** No game data, tokens or email addresses are stored in the guest identifier.
- * Background tabs stop immediately. Presence failures stay isolated from game actions.
- */
+/** Foreground-only operational presence. No display, card actions or account state changes. */
 export default function ActivityPresence({roomCode,token,name,accountId}:{roomCode?:string;token?:string;name:string;accountId:string|null}) {
   const current=useRef({roomCode,token,name}); current.current={roomCode,token,name};
-  const tabId=useRef('');
   const guestId=useRef('');
   useEffect(()=>{
-    tabId.current=crypto.randomUUID();
+    const tabId=crypto.randomUUID();
     if (!guestId.current) guestId.current=guestIdentity();
+    const guest=guestId.current;
     let disposed=false,timer:ReturnType<typeof setTimeout>|undefined,failures=0,inFlight=false;
     let controller:AbortController|null=null;
     const identity=getClientIdentity();
@@ -33,12 +31,19 @@ export default function ActivityPresence({roomCode,token,name,accountId}:{roomCo
       const latest=visible?current.current:initial;
       const headers:Record<string,string>={'Content-Type':'application/json','X-Parkes-Identity':identity.key};
       if (latest.token) headers.Authorization=`Bearer ${latest.token}`;
-      const body=JSON.stringify({tabId:tabId.current,guestId:guestId.current,visible,...(latest.roomCode?{roomCode:latest.roomCode}:{}),name:latest.name.slice(0,24)});
-      if (!visible) { void fetch('/api/activity/presence',{method:'POST',headers,body,credentials:'same-origin',keepalive:true,cache:'no-store'}).catch(()=>{}); return; }
-      inFlight=true;controller=new AbortController();
-      const timeout=setTimeout(()=>controller?.abort(),6000);
+      const body=JSON.stringify({tabId,guestId:guest,visible,...(latest.roomCode?{roomCode:latest.roomCode}:{}),name:latest.name.slice(0,24)});
+      if (!visible) {
+        void fetch('/api/activity/presence',{method:'POST',headers,body,credentials:'same-origin',keepalive:true,cache:'no-store'})
+          .then(response=>response.body?.cancel()).catch(()=>{});
+        return;
+      }
+      inFlight=true;
+      const requestController=new AbortController(); controller=requestController;
+      const timeout=setTimeout(()=>requestController.abort(),6000);
       try {
-        const response=await fetch('/api/activity/presence',{method:'POST',headers,body,credentials:'same-origin',cache:'no-store',signal:controller.signal});
+        const response=await fetch('/api/activity/presence',{method:'POST',headers,body,credentials:'same-origin',cache:'no-store',signal:requestController.signal});
+        // The endpoint is a small 204/error response; release its body before another check-in.
+        await response.arrayBuffer();
         failures=response.ok?0:Math.min(failures+1,4);
       } catch { failures=Math.min(failures+1,4); }
       finally {
