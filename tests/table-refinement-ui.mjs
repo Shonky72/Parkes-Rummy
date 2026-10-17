@@ -1,3 +1,4 @@
+// Page readiness is checked by the existing UI locators below. Foreground presence is periodic network traffic.
 import assert from 'node:assert/strict';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
@@ -59,7 +60,7 @@ try{
  await auditBadge();
  for(const size of [{name:'phone',width:390,height:844},{name:'small-phone',width:320,height:568},{name:'desktop',width:1440,height:900}]){
   const context=await browser.newContext({viewport:size,isMobile:size.width<800,hasTouch:size.width<800,reducedMotion:'reduce'});page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));const state=await mock(context);
-  await page.goto(`${base}/join/QUIK`,{waitUntil:'networkidle'});await page.locator('.adaptive-meld').first().waitFor();await pause(250);
+  await page.goto(`${base}/join/QUIK`,{waitUntil:'domcontentloaded'});await page.locator('.adaptive-meld').first().waitFor();await pause(250);
   assert.equal(await page.locator('[data-meld-id="closed-run"].adaptive-meld .complete-run-stack').count(),1);
   assert.equal(await page.locator('[data-meld-id="closed-run"].adaptive-meld [data-meld-target]').count(),0);
   const overflow=await page.locator('.player-melds,.adaptive-meld-cards,.meld-fan').evaluateAll(es=>es.filter(e=>e.scrollWidth>e.clientWidth+2).map(e=>({class:e.className,scroll:e.scrollWidth,width:e.clientWidth})));
@@ -87,7 +88,7 @@ try{
   await page.screenshot({path:`${output}/${size.name}-complete.png`,fullPage:true});assert.deepEqual(errors,[]);results.push({screen:size.name,font,eventFont,noMeldOverflow:true,fixedStatusGeometry:true,immediatePending:true,completeRunRetainsTenCards:true,badgeOutsideControls:true});await context.close();
  }
  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,reducedMotion:'reduce'});page=await context.newPage();await mock(context,true);
- await page.goto(`${base}/join/QUIK`,{waitUntil:'networkidle'});await page.locator('[data-hand-card="hand-0"]').click();await page.locator('.hand-actions>.button').filter({hasText:'Discard'}).click();await page.locator('.quick-result-actions').waitFor({timeout:15000});
+ await page.goto(`${base}/join/QUIK`,{waitUntil:'domcontentloaded'});await page.locator('[data-hand-card="hand-0"]').click();await page.locator('.hand-actions>.button').filter({hasText:'Discard'}).click();await page.locator('.quick-result-actions').waitFor({timeout:15000});
  assert.equal(await page.getByRole('button',{name:'Rematch',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:/Deal hand/}).count(),0);await page.screenshot({path:`${output}/quick-final.png`,fullPage:true});
  await page.getByRole('button',{name:'New Quick Play',exact:true}).click();await page.locator('.quick-result-actions').waitFor({state:'hidden'});await page.locator('.game-header').waitFor();await context.close();
  await writeFile(`${output}/checks.json`,JSON.stringify({results,quickFinal:true},null,2));console.log(JSON.stringify(results));
