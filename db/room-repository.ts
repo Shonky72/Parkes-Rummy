@@ -1,5 +1,8 @@
 import { database, type SqlConnection, type SqlDatabase } from './index';
 import type { RoomState } from '../lib/types';
+import { abandonRecords, recordEvents } from '../lib/rummy';
+import { RecordsRepository, recordsWriteCtes, recordEventValues } from './records';
+import { ensureLadderSchema, processRankedRoom } from './ladder';
 
 export interface Membership { userId: string; playerId: string; hidden: boolean }
 export interface RoomRecord { room: RoomState; version: number; memberships: Membership[] }
@@ -35,41 +38,71 @@ async function addMembership(connection: SqlConnection, code: string, membership
   if (result.rowCount !== 1) throw new RetryWrite();
 }
 export class PostgresRoomRepository implements RoomRepository {
-  constructor(private readonly db: SqlDatabase = database) {}
+  private readonly records: RecordsRepository;
+  constructor(private readonly db: SqlDatabase = database) { this.records=new RecordsRepository(db); }
   async load(code: string) {
     const result = await this.db.query<JoinedRow>(`SELECT ${joinedColumns} FROM rooms r LEFT JOIN room_memberships m ON m.room_code = r.code WHERE r.code = $1`, [code]);
     return records(result.rows)[0] ?? null;
   }
   async insert(room: RoomState, membership?: NewMembership) {
+    if(room.ranked)await ensureLadderSchema(this.db);
+    const events=recordEvents(room);
+    if(events.length)await this.records.ensure();
+    const savedState=JSON.stringify(room.records?{...room,records:{...room.records,events:[]}}:room);
     try {
-      return await this.db.transaction(async connection => {
-        const result = await connection.query('INSERT INTO rooms (code, state, version, created_at, updated_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING RETURNING code', [room.code, JSON.stringify(room), room.version, room.createdAt, room.updatedAt]);
+      const saved=await this.db.transaction(async connection => {
+        const result = await connection.query('INSERT INTO rooms (code, state, version, created_at, updated_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING RETURNING code', [room.code, savedState, room.version, room.createdAt, room.updatedAt]);
         if (result.rowCount !== 1) return false;
         if (membership) await addMembership(connection, room.code, membership);
+        if(events.length)await connection.query(`WITH changed AS (SELECT code FROM rooms WHERE code=$1)${recordsWriteCtes(2)} SELECT code FROM changed`,[room.code,recordEventValues(events)]);
+        if(room.ranked&&room.status==='finished')await processRankedRoom(connection,room);
         return true;
       });
+      if(saved&&room.records)room.records.events=[];
+      return saved;
     } catch (error) { if (error instanceof RetryWrite) return false; throw error; }
   }
   async save(room: RoomState, expectedVersion: number, membership?: NewMembership, options?: SaveOptions) {
-    const values = [JSON.stringify(room), room.version, room.updatedAt, room.code, expectedVersion];
+    const rankedFinish=!!room.ranked&&room.status==='finished';
+    if(rankedFinish)await ensureLadderSchema(this.db);
+    const events=recordEvents(room);
+    if(events.length)await this.records.ensure();
+    const state=JSON.stringify(room.records?{...room,records:{...room.records,events:[]}}:room);
+    const values:unknown[] = [state, room.version, room.updatedAt, room.code, expectedVersion];
+    const sql=events.length?`WITH changed AS (${updateStateSql})${recordsWriteCtes(6)} SELECT code FROM changed`:updateStateSql;
+    if(events.length)values.push(recordEventValues(events));
     // A single conditional UPDATE is already atomic. Card moves do not change
     // membership, so BEGIN, membership DELETE and COMMIT add no protection here.
     // Leave/join/removal still use the full transaction below.
-    if (!membership && options?.membershipUnchanged === true) {
-      return (await this.db.query(updateStateSql, values)).rowCount === 1;
+    if (!membership && options?.membershipUnchanged === true && !rankedFinish) {
+      const saved=(await this.db.query(sql, values)).rows.length === 1;
+      if(saved&&room.records)room.records.events=[];
+      return saved;
     }
     try {
-      return await this.db.transaction(async connection => {
-        const result = await connection.query(updateStateSql, values);
-        if (result.rowCount !== 1) return false;
+      const saved=await this.db.transaction(async connection => {
+        const result = await connection.query(sql, values);
+        if (result.rows.length !== 1) return false;
         await connection.query('DELETE FROM room_memberships WHERE room_code = $1 AND NOT (player_id = ANY($2::text[]))', [room.code, room.players.filter(player => !player.isBot).map(player => player.id)]);
         if (membership) await addMembership(connection, room.code, membership);
+        if(rankedFinish)await processRankedRoom(connection,room);
         return true;
       });
+      if(saved&&room.records)room.records.events=[];
+      return saved;
     } catch (error) { if (error instanceof RetryWrite) return false; throw error; }
   }
   async delete(code: string, expectedVersion: number) {
-    return (await this.db.query('DELETE FROM rooms WHERE code = $1 AND version = $2 RETURNING code', [code, expectedVersion])).rowCount === 1;
+    // Only the host chose this withdrawal. Other players lose their table
+    // involuntarily, so unfinished metrics are marked as interrupted.
+    const current=await this.load(code);
+    if(!current||current.version!==expectedVersion)return false;
+    abandonRecords(current.room,current.room.hostId,'withdrawal');
+    for(const player of current.room.players)if(player.id!==current.room.hostId)abandonRecords(current.room,player.id,'table-closed');
+    const events=recordEvents(current.room);
+    if(!events.length)return (await this.db.query('DELETE FROM rooms WHERE code = $1 AND version = $2 RETURNING code', [code, expectedVersion])).rowCount===1;
+    await this.records.ensure();
+    return (await this.db.query(`WITH changed AS (DELETE FROM rooms WHERE code=$1 AND version=$2 RETURNING code)${recordsWriteCtes(3)} SELECT code FROM changed`,[code,expectedVersion,recordEventValues(events)])).rows.length===1;
   }
   async listForAccount(userId: string) {
     const result = await this.db.query<JoinedRow>(`SELECT ${joinedColumns} FROM rooms r JOIN room_memberships m ON m.room_code = r.code WHERE m.user_id = $1 AND m.hidden = false ORDER BY r.updated_at DESC LIMIT 128`, [userId]);

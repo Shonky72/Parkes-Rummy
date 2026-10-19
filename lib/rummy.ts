@@ -3,6 +3,8 @@ import type {
   PlayerState, PublicRoom, Requirement, RoomEvent, RoomPreview, RoomState,
   RuleDefinition, Suit, TableCard,
 } from './types';
+import { RECORDS_ENGINE_VERSION } from './records-types';
+import type { AchievementId, RecordConditions, RecordEvidence, RecordFormat, RecordTimelineEntry, RoomRecordEvent } from './records-types';
 
 const SUITS: Suit[] = ['C', 'D', 'H', 'S'];
 const RED: Suit[] = ['D', 'H'];
@@ -452,6 +454,78 @@ export function findOpeningMelds(cards: Card[], game: GameType, round: number): 
   return melds?.map((meld, index) => ({ ...meld, id: `opening-${index + 1}` })) ?? null;
 }
 
+const recordExampleCache = new Map<string, Meld[]>();
+
+/**
+ * Build display examples from the engine's requirements and validate the whole
+ * opening, including Original Rules' extra constraints. These are sample cards,
+ * never a second readiness validator or a randomly favourable recorded deal.
+ */
+export function getRuleExample(game: GameType, ruleNumber: number): Meld[] {
+  const key = `${game}:${ruleNumber}`;
+  const cached = recordExampleCache.get(key);
+  if (cached) return clone(cached);
+  const definition = RULES[game]?.[ruleNumber - 1];
+  if (!definition) throw new GameError('Choose an existing opening rule.');
+  const naturalRanks = RANKS.filter(rank => rank !== 2);
+  const palettes: Suit[][] = [SUITS, RED, BLACK, ['C'], ['D'], ['H'], ['S']];
+  for (let base = 0; base < naturalRanks.length; base++) {
+    for (const requirements of requirementOptions(definition)) {
+      const alternatives = requirements.map((requirement, group) => {
+        const choices: Card[][] = [];
+        const seen = new Set<string>();
+        const firstRank = requirement.kind === 'set' ? naturalRanks[(base + group * 3) % naturalRanks.length]
+          : 5 + (base % (11 - requirement.count));
+        for (const pattern of suitPatterns(requirement, requirement.count)) {
+          for (const palette of palettes) for (const paired of [false, true]) {
+            const usedSuits = new Set<Suit>();
+            const printed = new Map<string, number>();
+            const cards: Card[] = [];
+            for (let index = 0; index < requirement.count; index++) {
+              const allowed = pattern.allowed[index].filter(suit => palette.includes(suit) && (!pattern.unique || !usedSuits.has(suit)));
+              if (!allowed.length) break;
+              const suit = allowed[pattern.unique ? 0 : (paired ? Math.floor(index / 2) : index) % allowed.length];
+              let rank = requirement.kind === 'set' ? firstRank : firstRank + index;
+              if ((printed.get(`${rank}:${suit}`) ?? 0) >= 2) {
+                if (requirement.naturalOnly) break;
+                rank = 2;
+              }
+              const identity = `${rank}:${suit}`;
+              if ((printed.get(identity) ?? 0) >= 2) break;
+              printed.set(identity, (printed.get(identity) ?? 0) + 1);
+              usedSuits.add(suit);
+              cards.push({ id: `example-${game}-${ruleNumber}-${group}-${index}`, rank, suit });
+            }
+            if (cards.length !== requirement.count) continue;
+            const identity = cards.map(card => `${card.rank}${card.suit}`).join(',');
+            if (!seen.has(identity)) { seen.add(identity); choices.push(cards); }
+          }
+        }
+        return choices;
+      });
+      const choose = (group: number, selected: Card[]): Meld[] | null => {
+        if (group === alternatives.length) {
+          const printed = new Map<string, number>();
+          for (const card of selected) {
+            const identity = `${card.rank}:${card.suit}`;
+            printed.set(identity, (printed.get(identity) ?? 0) + 1);
+            if (printed.get(identity)! > 2) return null;
+          }
+          return findOpeningMelds(selected, game, ruleNumber);
+        }
+        for (const cards of alternatives[group]) {
+          const result = choose(group + 1, [...selected, ...cards]);
+          if (result) return result;
+        }
+        return null;
+      };
+      const example = choose(0, []);
+      if (example) { recordExampleCache.set(key, example); return clone(example); }
+    }
+  }
+  throw new GameError(`No engine-valid example found for ${definition.title}.`);
+}
+
 /**
  * Opening colour, suit and natural-card requirements apply only when going down.
  * Later additions match the set's rank or extend a run, with ordinary wild twos.
@@ -555,6 +629,7 @@ export function publicRoom(original: RoomState, youId: string): PublicRoom {
   return {
     code: room.code, hostId: room.hostId, game: room.game, round: room.round, status: room.status,
     ...(room.quickPlay ? { quickPlay: { ...room.quickPlay } } : {}),
+    ...(room.ranked ? { ranked: { format: room.ranked.format } } : {}),
     players: room.players.map(({ id, name, color, hand, score, ruleNumber, down, completedTurns, laidDownTurn, isBot, difficulty, ready, fontId, symbolId }) => ({ id, name, color, handCount: hand.length, score, ruleNumber, down, completedTurns, laidDownTurn, isBot, difficulty, ready, fontId: fontId ?? 'default', symbolId: symbolId ?? 'initials' })),
     hand: own?.hand ?? [], youId,
     currentRule: clone(RULES[room.game][ruleNumberFor(own, room.round) - 1]),
@@ -881,7 +956,277 @@ export function applyAction(original: RoomState, actorId: string, action: GameAc
   room.version = original.version + 1;
   room.updatedAt = Date.now();
   paceBots(room);
+  observeRecordsAction(original, room, actorId, action);
   return room;
+}
+
+/** Frozen challenge engines inject their own exact solver and version. */
+export interface RecordsEngine {
+  version: string;
+  rules: Record<GameType, RuleDefinition[]>;
+  findOpening: (cards: Card[], game: GameType, ruleNumber: number) => Meld[] | null;
+}
+
+/** Activate before a new game starts. Existing or tutorial hands are never backfilled. */
+export function enableRecords(room: RoomState, options: {
+  format?: RecordFormat; challengeId?: string; eligible?: boolean; exclusionReason?: string;
+} = {}): void {
+  if (room.records || (room.status !== 'lobby' && room.status !== 'round-end')) return;
+  room.records = {
+    schemaVersion: 1, engineVersion: RECORDS_ENGINE_VERSION,
+    gameId: globalThis.crypto.randomUUID(), handId: null, enabledAt: Date.now(),
+    completeGameObserved: room.status === 'lobby',
+    ...options, eligible: options.eligible !== false,
+    exclusionReason: options.exclusionReason ?? (options.eligible === false ? 'practice' : null),
+    observedActionId: room.events.at(-1)?.id ?? 0, current: {}, events: [],
+  };
+}
+
+/** Transactional persistence reads this outbox, then drains only committed events. */
+export function recordEvents(room: RoomState): RoomRecordEvent[] {
+  return clone(room.records?.events ?? []);
+}
+
+function queueRecordEvent(room: RoomState, evidence: RecordEvidence, type: RoomRecordEvent['type']): void {
+  const records = room.records!;
+  const eventId = `${evidence.handId}:${evidence.playerId}:${type}`;
+  if (records.events.some(entry => entry.eventId === eventId)) return;
+  records.events.push({
+    eventId, type, gameId: evidence.gameId, handId: evidence.handId,
+    playerId: evidence.playerId, status: evidence.status,
+    at: evidence.finishedAt ?? evidence.startedAt, evidence: clone(evidence),
+  });
+}
+
+const RECORD_TIMELINE_LIMIT = 120;
+function recordTimeline(evidence: RecordEvidence, entry: RecordTimelineEntry): void {
+  evidence.timeline.push(clone(entry));
+  if (evidence.timeline.length > RECORD_TIMELINE_LIMIT) {
+    // Preserve the deal and most recent actions. Milestone combinations remain separately stored.
+    evidence.timeline.splice(1, evidence.timeline.length - RECORD_TIMELINE_LIMIT);
+    evidence.timelineTruncated = true;
+  }
+}
+
+/** Optional wildcards exclude special natural twos in Original Rule 4. */
+export function naturalOpeningEligible(game: GameType, ruleNumber: number, rules = RULES): boolean {
+  if (game === 4 && ruleNumber === 4) return false;
+  const definition = rules[game]?.[ruleNumber - 1];
+  return !!definition && [definition.requirements, ...(definition.alternativeRequirements ?? [])]
+    .some(groups => groups.some(group => !group.naturalOnly));
+}
+
+function markAchievement(evidence: RecordEvidence, id: AchievementId, repeat = false): void {
+  if (!evidence.eligible) return;
+  const previous = evidence.achievementCounts?.[id] ?? Number(evidence.achievements.includes(id));
+  if (previous && !repeat) return;
+  evidence.achievementCounts = { ...evidence.achievementCounts, [id]: previous + 1 };
+  if (!evidence.achievements.includes(id)) evidence.achievements.push(id);
+}
+
+function recordReady(evidence: RecordEvidence, opening: Meld[] | null, turn: number, actionId: number, legal: boolean): void {
+  if (!opening) return;
+  if (!evidence.firstReady) evidence.firstReady = { turn, actionId, opening: clone(opening) };
+  if (legal) {
+    if (!evidence.firstLegal) evidence.firstLegal = { turn, actionId, opening: clone(opening) };
+    if (evidence.legalOpportunityTurns.at(-1) !== turn) {
+      evidence.legalOpportunityTurns.push(turn);
+      // Only the latest turns are needed for counting ended opportunities; firstLegal is permanent.
+      if (evidence.legalOpportunityTurns.length > 120) evidence.legalOpportunityTurns.shift();
+    }
+  }
+}
+
+function startRecordsHand(room: RoomState, newGame: boolean, engine: RecordsEngine, actionId: number): void {
+  const records = room.records!;
+  if (newGame) { records.gameId = globalThis.crypto.randomUUID(); records.completeGameObserved = true; }
+  records.handId = globalThis.crypto.randomUUID();
+  records.engineVersion = engine.version;
+  records.current = {};
+  const now = room.events.find(entry => entry.id === actionId)?.at ?? Date.now();
+  for (const [seat, player] of room.players.entries()) {
+    const ruleNumber = ruleNumberFor(player, room.round);
+    const opening = engine.findOpening(player.hand, room.game, ruleNumber);
+    const conditions: RecordConditions = {
+      engineVersion: engine.version, format: records.format ?? (room.quickPlay ? 'quick-play' : 'full-game'),
+      deal: records.challengeId ? 'fixed' : 'random', singleHand: !!room.quickPlay,
+      playerCount: room.players.length, humanCount: room.players.filter(candidate => !candidate.isBot).length,
+      seat, startingSeat: (room.round - 1) % room.players.length,
+      roster: room.players.map(({ id, name, isBot, difficulty }) => ({ playerId: id, name, isBot, difficulty })),
+      hints: room.showMoveHints !== false, timerSeconds: room.turnLimitSeconds,
+      ...(records.challengeId ? { challengeId: records.challengeId } : {}),
+      ...(records.format === 'ranked' ? { ranked: true } : {}),
+    };
+    const evidence: RecordEvidence = {
+      schemaVersion: 1, gameId: records.gameId, handId: records.handId, playerId: player.id,
+      game: room.game, ruleNumber, ruleId: `${room.game}:${ruleNumber}`, handNumber: room.round,
+      startedAt: now, finishedAt: null, status: 'started',
+      eligible: records.eligible && !player.isBot,
+      exclusionReason: player.isBot ? 'AI seat' : records.exclusionReason, conditions,
+      readyFromDeal: !!opening, firstDrawReady: false, firstDrawCompletedOpening: false,
+      firstReady: opening ? { turn: 0, actionId, opening: clone(opening) } : null,
+      firstLegal: null, actualOpening: null, opportunitiesPassed: 0, legalOpportunityTurns: [],
+      firstDiscardSurvived: null, readinessLostOnDiscard: 0,
+      completed: false, wentOut: false, closingTurns: null, penalty: null, totalScore: null, ownTurns: 0,
+      wildcardCount: null, naturalEligible: naturalOpeningEligible(room.game, ruleNumber, engine.rules),
+      achievements: [], timeline: [], timelineTruncated: false, gameOutcome: null, endActionId: null,
+    };
+    recordTimeline(evidence, { kind: 'deal', turn: 0, actionId, ready: !!opening, legal: false,
+      ...(opening ? { opening } : {}), text: opening ? 'Complete opening present in the deal; first turn still required.' : 'Ten cards dealt.' });
+    if (opening) markAchievement(evidence, 'born-ready');
+    records.current[player.id] = evidence;
+    queueRecordEvent(room, evidence, 'hand-start');
+  }
+}
+
+function finishRecordsHand(room: RoomState, actionId: number): void {
+  if (!room.records || !room.result || !['round-end', 'finished'].includes(room.status)) return;
+  const now = room.events.at(-1)?.at ?? Date.now();
+  const lowest = Math.min(...room.result.scores.map(row => row.total));
+  const winnerIds = room.result.scores.filter(row => row.total === lowest).map(row => row.playerId);
+  for (const evidence of Object.values(room.records.current)) {
+    if (evidence.status !== 'started') continue;
+    const row = room.result.scores.find(score => score.playerId === evidence.playerId);
+    if (!row) continue;
+    evidence.status = 'completed'; evidence.finishedAt = now; evidence.endActionId = actionId;
+    evidence.completed = !!evidence.actualOpening;
+    evidence.wentOut = room.result.winnerId === evidence.playerId;
+    evidence.penalty = row.penalty; evidence.totalScore = row.total;
+    evidence.closingTurns = evidence.wentOut && evidence.actualOpening
+      ? Math.max(0, evidence.ownTurns - evidence.actualOpening.turn) : null;
+    const afterThree = room.history[2]?.scores;
+    const highest = afterThree ? Math.max(...afterThree.map(score => score.total)) : null;
+    const highestAfterThree = !!afterThree && new Set(afterThree.map(score => score.total)).size > 1
+      && afterThree.find(score => score.playerId === evidence.playerId)?.total === highest;
+    const personalHistory = room.history.map(result => result.scores.find(score => score.playerId === evidence.playerId));
+    const cleanSweep = !room.quickPlay && room.history.length === 10 && personalHistory.every((score, index) => score?.melded && score.ruleNumber === index + 1);
+    evidence.gameOutcome = {
+      finished: room.status === 'finished', winnerIds, total: row.total, hands: room.history.length,
+      observedFromStart: room.records.completeGameObserved !== false,
+      scores: room.result.scores.map(score => ({ playerId: score.playerId, total: score.total })),
+      highestAfterThree, cleanSweep,
+    };
+    if (!room.quickPlay && room.status === 'finished' && room.records.completeGameObserved !== false) {
+      if (cleanSweep) markAchievement(evidence, 'clean-sweep');
+      const soleWinner = winnerIds.length === 1 && winnerIds[0] === evidence.playerId;
+      if (soleWinner && highestAfterThree) markAchievement(evidence, 'comeback-kid');
+      const nextLowest = room.result.scores.filter(score => score.playerId !== evidence.playerId).map(score => score.total);
+      if (soleWinner && Math.min(...nextLowest) - row.total === 5) markAchievement(evidence, 'by-a-whisker');
+      if (soleWinner && evidence.conditions.playerCount === 4 && evidence.conditions.humanCount === 4) markAchievement(evidence, 'against-the-table');
+    }
+    recordTimeline(evidence, { kind: 'end', turn: evidence.ownTurns, actionId, ready: false, legal: false,
+      text: `${evidence.wentOut ? 'Went out' : 'Hand ended'}; ${row.penalty} remaining points.` });
+    queueRecordEvent(room, evidence, 'hand-end');
+  }
+}
+
+/**
+ * Observe only accepted concrete engine actions. This function changes no game state.
+ * Called inside both normal and frozen engines so bot/timeout sub-actions are recorded.
+ */
+export function observeRecordsAction(before: RoomState, room: RoomState, actorId: string, action: GameAction,
+  engine: RecordsEngine = { version: RECORDS_ENGINE_VERSION, rules: RULES, findOpening: findBotOpening }): void {
+  const records = room.records;
+  if (!records) return;
+  const lastActionId = room.events.at(-1)?.id ?? 0;
+  if (lastActionId <= records.observedActionId) return;
+  const eventType = action.type === 'start' || action.type === 'nextHand' ? 'start'
+    : action.type === 'goDown' ? 'meld' : action.type === 'layoffMany' ? 'layoff' : action.type;
+  const actionId = room.events.find(entry => entry.id > (before.events.at(-1)?.id ?? 0) && entry.type === eventType)?.id ?? lastActionId;
+  records.observedActionId = lastActionId;
+  if (action.type === 'start' || action.type === 'nextHand') {
+    startRecordsHand(room, action.type === 'start', engine, actionId); return;
+  }
+  if (action.type === 'rematch') { records.current = {}; records.handId = null; return; }
+  const evidence = records.current[actorId];
+  const priorPlayer = before.players.find(player => player.id === actorId);
+  const player = room.players.find(candidate => candidate.id === actorId);
+  if (!evidence || !player || !priorPlayer || evidence.status !== 'started') {
+    if (before.status === 'playing' && (room.status === 'round-end' || room.status === 'finished')) finishRecordsHand(room, actionId);
+    return;
+  }
+  const turn = priorPlayer.completedTurns + 1;
+  if (action.type === 'draw') {
+    evidence.ownTurns = turn;
+    const opening = player.down ? null : engine.findOpening(player.hand, room.game, evidence.ruleNumber);
+    const legal = !!opening && room.status === 'playing' && room.phase === 'play'
+      && room.turnPlayerId === actorId && !player.down && player.completedTurns > 0;
+    recordReady(evidence, opening, turn, actionId, legal);
+    if (priorPlayer.completedTurns === 0) {
+      evidence.firstDrawReady = !!opening;
+      evidence.firstDrawCompletedOpening = !!opening && !evidence.readyFromDeal;
+      if (evidence.firstDrawCompletedOpening) markAchievement(evidence, 'chomping-at-the-bit');
+    }
+    const priorIds = new Set(priorPlayer.hand.map(card => card.id));
+    recordTimeline(evidence, { kind: 'draw', turn, actionId, ready: !!opening, legal,
+      cards: player.hand.filter(card => !priorIds.has(card.id)), source: action.source,
+      ...(opening && (evidence.firstReady?.actionId === actionId || evidence.firstLegal?.actionId === actionId) ? { opening } : {}),
+      text: legal ? `Opening available on Turn ${turn}.` : opening ? `Opening ready on Turn ${turn}; first turn still required.` : `Pickup on Turn ${turn}.` });
+  } else if (action.type === 'goDown') {
+    const oldMeldIds = new Set(before.melds.map(meld => meld.id));
+    const opening = room.melds.filter(meld => meld.ownerId === actorId && !oldMeldIds.has(meld.id));
+    // This is the accepted physical partition, never an alternative natural solver result.
+    evidence.actualOpening = { turn, actionId, opening: clone(opening) };
+    evidence.completed = true; evidence.ownTurns = Math.max(evidence.ownTurns, turn);
+    evidence.wildcardCount = opening.flatMap(meld => meld.cards).filter(card => card.rank === 2).length;
+    if (evidence.firstLegal?.turn === turn && evidence.opportunitiesPassed === 0) markAchievement(evidence, 'first-chance');
+    if (evidence.naturalEligible && evidence.wildcardCount === 0) markAchievement(evidence, 'natural-talent');
+    if (room.game === 4 && evidence.ruleNumber === 6 && evidence.wildcardCount === 0) markAchievement(evidence, 'royal-appointment');
+    if (room.game === 4 && evidence.ruleNumber === 10) markAchievement(evidence, 'heart-of-parkes');
+    if (room.game === 2 && evidence.ruleNumber === 7) markAchievement(evidence, 'six-of-the-best');
+    if (room.game === 3 && evidence.ruleNumber === 8) markAchievement(evidence, 'suit-yourself');
+    recordTimeline(evidence, { kind: 'opening', turn, actionId, ready: true, legal: true, opening,
+      text: `Opening played on Turn ${turn}.` });
+  } else if (action.type === 'layoff' || action.type === 'layoffMany') {
+    const oldMeld = before.melds.find(meld => meld.id === action.meldId);
+    const newMeld = room.melds.find(meld => meld.id === action.meldId);
+    const ranks = new Set(newMeld?.cards.map(shownRank));
+    if (oldMeld?.kind === 'run' && oldMeld.cards.length < 10 && ranks.size === 10
+      && Array.from({ length: 10 }, (_, index) => index + 5).every(rank => ranks.has(rank))) markAchievement(evidence, 'runway-closed', true);
+    if (!player.hand.length && oldMeld?.ownerId !== actorId) markAchievement(evidence, 'borrowed-space');
+    const remainingIds = new Set(player.hand.map(card => card.id));
+    recordTimeline(evidence, { kind: 'layoff', turn, actionId, ready: false, legal: false,
+      cards: priorPlayer.hand.filter(card => !remainingIds.has(card.id)), text: `Added to ${oldMeld?.ownerId === actorId ? 'own' : 'another player’s'} meld on Turn ${turn}.` });
+  } else if (action.type === 'discard') {
+    const wasReady = !priorPlayer.down && evidence.legalOpportunityTurns.at(-1) === turn;
+    if (wasReady) evidence.opportunitiesPassed++;
+    const opening = player.down ? null : engine.findOpening(player.hand, room.game, evidence.ruleNumber);
+    const previousReady = !priorPlayer.down && (wasReady || (turn === 1 && evidence.firstDrawReady));
+    if (previousReady && !opening) evidence.readinessLostOnDiscard++;
+    if (turn === 1 && evidence.firstDrawReady) evidence.firstDiscardSurvived = !!opening;
+    recordReady(evidence, opening, turn, actionId, false);
+    recordTimeline(evidence, { kind: 'discard', turn, actionId, ready: !!opening, legal: false,
+      cards: priorPlayer.hand.filter(card => card.id === action.cardId),
+      ...(turn === 1 && evidence.firstDrawReady && opening ? { opening } : {}),
+      text: previousReady && !opening ? `Opening no longer present after the Turn ${turn} discard.`
+        : wasReady ? `Turn ${turn} ended with an opening available before discard.` : `Discarded on Turn ${turn}.` });
+  }
+  if (before.status === 'playing' && (room.status === 'round-end' || room.status === 'finished')) finishRecordsHand(room, actionId);
+}
+
+/** Explicit withdrawal counts; ordinary navigation and transient disconnects do not call this. */
+export function abandonRecords(room: RoomState, playerId?: string, reason: 'withdrawal' | 'service-interruption' | 'table-closed' = 'withdrawal'): void {
+  if (!room.records) return;
+  const now = Date.now();
+  for (const evidence of Object.values(room.records.current)) {
+    if (evidence.status !== 'started' || (playerId && playerId !== evidence.playerId)) continue;
+    const player = room.players.find(candidate => candidate.id === evidence.playerId);
+    evidence.status = reason === 'withdrawal' ? 'abandoned' : 'service-interrupted';
+    evidence.finishedAt = now; evidence.endActionId = room.events.at(-1)?.id ?? 0;
+    evidence.completed = !!evidence.actualOpening;
+    evidence.penalty = player ? handPoints(player.hand) : null;
+    evidence.totalScore = player ? player.score + (evidence.penalty ?? 0) : null;
+    if (reason !== 'withdrawal') {
+      evidence.eligible = false;
+      evidence.exclusionReason = reason === 'table-closed' ? 'host closed the table' : 'confirmed service interruption';
+      evidence.achievements = [];
+    }
+    recordTimeline(evidence, { kind: 'abandonment', turn: evidence.ownTurns, actionId: evidence.endActionId,
+      ready: false, legal: false, text: reason === 'withdrawal' ? 'Withdrew; the dealt attempt counts.'
+        : reason === 'table-closed' ? 'The host closed the table; this interrupted hand is excluded from performance.'
+          : 'Confirmed service interruption; excluded from performance.' });
+    queueRecordEvent(room, evidence, 'abandonment');
+  }
 }
 
 /** Whether a partial group fits inside some legal completed run. Only the bot's own cards are supplied. */
