@@ -1,0 +1,33 @@
+name: Reveal review workbench
+on:
+  push:
+    branches: [fix/reveal-voice-approved-start]
+    paths: [.github/workflows/reveal-review-workbench.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false playwright
+      - name: Export code and dependencies for isolated tests
+        run: |
+          git archive HEAD -o /tmp/reveal-source.tar
+          tar -czf /tmp/reveal-dependencies.tgz node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reveal-review-source
+          path: /tmp/reveal-source.tar
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reveal-review-dependencies
+          path: /tmp/reveal-dependencies.tgz
+          compression-level: 0
+          retention-days: 1
