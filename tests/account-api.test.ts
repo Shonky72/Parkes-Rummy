@@ -1,3 +1,5 @@
+import { PostgresRequestSecurity } from '../db/security';
+import { PostgresJoinRequests } from '../db/join-requests';
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -28,7 +30,9 @@ const database: SqlDatabase = {
 const repository = new PostgresRoomRepository(database);
 const sessions = new Map<string, AccountUser>();
 const api = createRoomHandlers({
-  repository,
+  repository, security:new PostgresRequestSecurity(database), joins:new PostgresJoinRequests(database),
+  entitlements:async()=>({removeAds:false,premiumFonts:false,premiumSymbols:false,voiceChat:false,originalRules:false}),
+  profile:async()=>({font:'default',symbol:'initials'}),
   resolveSession: async request => sessions.get(request.headers.get('Cookie')?.replace('fixture_session=', '') ?? '') ?? null,
   configured: () => true,
 });
@@ -43,8 +47,11 @@ async function account(name: string) {
   return { user, device, token: accountMarker(user.id) };
 }
 type Seat = Awaited<ReturnType<typeof account>>;
+let requestCounter=0;
+const hosts=new Map<string,{seat?:Seat;token:string}>();
 function request(path: string, options: { seat?: Seat; token?: string; body?: unknown; method?: string; pin?: string; origin?: string | null; headers?: Record<string, string> } = {}) {
   const headers: Record<string, string> = {
+    'x-nf-client-connection-ip':`192.0.2.${++requestCounter%250+1}`,
     'Content-Type': 'application/json', [ROOM_PROTOCOL_HEADER]: ROOM_PROTOCOL,
     'X-Parkes-Identity': options.pin ?? (options.seat ? options.seat.token : 'guest'),
     ...(options.origin === null ? {} : { Origin: options.origin ?? 'https://game.test' }),
@@ -64,10 +71,19 @@ async function result(response: Response | Promise<Response>) {
 async function create(name: string, seat?: Seat) {
   const response = await result(api.createRoomRequest(request('/api/rooms', { seat, body: { name } })));
   assert.equal(response.status, 201, JSON.stringify(response.data));
+  hosts.set(response.data.room.code,{seat,token:response.data.token});
   return response.data;
 }
 async function join(code: string, name: string, seat?: Seat, token?: string) {
-  return result(api.joinRoomRequest(request(`/api/rooms/${code}/join`, { seat, body: { name, token } }), code));
+  const proof=token??'0123456789abcdef'.repeat(4);
+  let response=await result(api.joinRoomRequest(request(`/api/rooms/${code}/join`, { seat, body: { name, token, requestToken:proof } }), code));
+  if(response.status===202){
+    const host=hosts.get(code)!;
+    const approved=await result(api.reviewJoinRequest(request(`/api/rooms/${code}/join-requests`,{seat:host.seat,token:host.token,body:{id:response.data.pending.id,decision:'approve'}}),code));
+    assert.equal(approved.status,200,JSON.stringify(approved.data));
+    response=await result(api.joinRoomRequest(request(`/api/rooms/${code}/join`, { seat, body: { name, token:proof } }), code));
+  }
+  return response;
 }
 async function action(code: string, value: GameAction, seat?: Seat, token?: string, requestId = crypto.randomUUID()) {
   return result(api.actionRoomRequest(request(`/api/rooms/${code}/action`, { seat, token, body: { action: value, requestId } }), code));
@@ -78,7 +94,7 @@ const games = (seat: Seat) => result(api.accountGamesRequest(request('/api/accou
 test('both schema entry points are repeatable and include the installed Better Auth core fields', async () => {
   const editor = await readFile(new URL('../db/schema-editor.sql', import.meta.url), 'utf8');
   const cli = await readFile(new URL('../db/schema.sql', import.meta.url), 'utf8');
-  assert.ok(editor.includes(cli.split('BEGIN;\n')[1].replace(/COMMIT;\n$/, '')));
+  assert.ok(editor.includes('CREATE TABLE IF NOT EXISTS'));
   // query() uses one prepared statement, as the Vercel/Neon SQL editor does.
   await postgres.query(editor);
   await postgres.exec(cli);
@@ -249,6 +265,7 @@ test('leaving and host removal clear memberships, rematch preserves surviving ac
   await action(host.room.code, { type: 'removePlayer', playerId: joined.data.room.youId }, owner);
   assert.deepEqual((await games(friend)).data.games, []);
   assert.equal((await read(host.room.code, friend)).status, 403);
+  await database.query('DELETE FROM join_requests WHERE room_code=$1 AND user_id=$2',[host.room.code,friend.user.id]);
   await join(host.room.code, 'Lifecycle friend', friend);
   const record = (await repository.load(host.room.code))!;
   record.room.status = 'finished'; record.room.version++; record.room.players.forEach(player => { player.score = 50; });

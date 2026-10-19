@@ -11,13 +11,13 @@
     "start": "next start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "typecheck": "tsc --noEmit --incremental false",
-    "test:backend": "node --import tsx --test tests/account-api.test.ts tests/auth-config.test.ts",
+    "test:backend": "node --import tsx --test tests/account-api.test.ts tests/auth-config.test.ts tests/activity.test.ts tests/request-origin.test.ts tests/stripe-lite.test.ts tests/security.test.ts tests/voice-lifecycle.test.ts",
     "db:provision": "node --import tsx scripts/provision-db.ts"
   },
   "dependencies": {
     "better-auth": "^1.7.0",
     "lucide-react": "^1.31.0",
-    "next": "16.3.4",
+    "next": "16.4.2",
     "pg": "^8.16.3",
     "qrcode": "1.5.4",
     "react": "19.2.6",
@@ -31,7 +31,8 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.4",
-    "eslint-config-next": "16.3.4",
+    "eslint-config-next": "16.4.2",
+    "playwright": "1.64.1",
     "tailwindcss": "4.2.1",
     "tsx": "^4.20.6",
     "typescript": "5.9.3"

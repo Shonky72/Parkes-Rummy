@@ -3,7 +3,7 @@
  * rules or player actions incompatibly with the previous server. An already-open
  * page must refresh before submitting actions under a different contract.
  */
-export const ROOM_PROTOCOL = 'multi-game-turns-v6';
+export const ROOM_PROTOCOL = 'host-approval-v7';
 export const ROOM_PROTOCOL_HEADER = 'X-Parkes-Protocol';
 export const ROOM_UPDATE_MESSAGE = 'Game updated. Refresh this page to use your current rule. Your cards, scores and saved seat are safe.';
 export const ROOM_RELOAD_KEY = 'parkes-rummy:protocol-reload';

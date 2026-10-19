@@ -6,7 +6,7 @@ import { getAudioSettings, initAudio, setAudioSettings } from "../lib/audio.ts";
 import { OPENING_MUSIC_URL, SHUFFLED_MUSIC_URLS } from "../lib/music-playlist.ts";
 
 test("the shared music player honours gestures and settings, advances automatically, and bounds file failures", async () => {
-  const globalNames = ["window", "navigator", "Audio"] as const;
+  const globalNames = ["window", "document", "navigator", "Audio"] as const;
   const originals = globalNames.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const);
   const stored = new Map<string, string>();
   const page = Object.assign(new EventTarget(), {
@@ -76,6 +76,7 @@ test("the shared music player honours gestures and settings, advances automatica
 
   Object.defineProperties(globalThis, {
     window: { value: page, configurable: true },
+    document: { value: Object.assign(new EventTarget(),{visibilityState:"visible"}), configurable:true },
     navigator: { value: { userActivation: { isActive: false } }, configurable: true },
     Audio: { value: FakeAudio, configurable: true },
   });
