@@ -19,7 +19,7 @@ jobs:
       - run: npm ci
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
-      - run: node --import tsx --test tests/original-rules.test.ts tests/tutorial.test.ts tests/quick-play.test.ts tests/tutorial-coaching.test.ts tests/phone-install.test.ts tests/bot-turn.test.ts tests/bot-turn-api.test.ts tests/rummy.test.ts tests/rule-progression.test.ts tests/draw-card-drag.test.ts tests/meld-layout.test.ts tests/request-origin.test.ts tests/activity.test.ts
+      - run: node --import tsx --test tests/original-rules.test.ts tests/tutorial.test.ts tests/quick-play.test.ts tests/tutorial-coaching.test.ts tests/phone-install.test.ts tests/bot-turn.test.ts tests/bot-turn-api.test.ts tests/rummy.test.ts tests/rule-progression.test.ts tests/draw-card-drag.test.ts tests/meld-layout.test.ts tests/request-origin.test.ts tests/activity.test.ts tests/hand-reveal.test.ts
       - run: npm run test:backend
       - run: node tests/activity-fixture.mjs && npm run build
       - run: rm -rf app/__activity_ui_fixture
@@ -30,6 +30,17 @@ jobs:
         run: node --import tsx tests/activity-ui.mjs
       - name: Verify approval, microphone cancellation, consent and CSP in Chromium
         run: node --import tsx tests/security-browser.mjs
+      - name: Verify approved starts, connected voice and end-hand reveal
+        if: ${{ !cancelled() && steps.browser_tools.outcome == 'success' }}
+        run: node --import tsx tests/reveal-session-ui.mjs
+      - name: Save reveal and session screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reveal-session-results
+          path: reveal-session-results/
+          if-no-files-found: ignore
+          retention-days: 3
       - name: Save owner dashboard screenshots
         if: always()
         uses: actions/upload-artifact@v4
