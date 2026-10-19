@@ -13,14 +13,14 @@ export function handRevealDuration(room: PublicRoom): number {
   return HAND_REVEAL_TIMING.flip + Math.max(0, Math.min(11, count) - 1) * HAND_REVEAL_TIMING.stagger + HAND_REVEAL_TIMING.hold;
 }
 
-/** Begin the flip at the actual card landing, not after the winner's glow fades.
+/** Begin the flip with the winning-card sequence, without waiting for landing.
  * Cancellation resolves the wait but never starts a reveal on a departed table.
  */
 export function coordinateHandReveal(playback: WinningCardPlayback, onReveal: () => void, duration: number): WinningCardPlayback {
   let cancelled = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let finishWait: (() => void) | undefined;
-  const reveal = playback.landed.then(() => {
+  const reveal = playback.started.then(() => {
     if (cancelled) return;
     onReveal();
     return new Promise<void>(resolve => {
@@ -29,6 +29,7 @@ export function coordinateHandReveal(playback: WinningCardPlayback, onReveal: ()
     });
   });
   return {
+    started: playback.started,
     landed: playback.landed,
     finished: Promise.all([playback.finished, reveal]).then(() => undefined),
     cancel() {

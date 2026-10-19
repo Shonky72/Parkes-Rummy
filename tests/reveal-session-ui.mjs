@@ -173,8 +173,9 @@ try{
   await h.page.locator('[data-hand-card="final-ace"]').click();
   await h.page.locator('.hand-actions>.button').filter({hasText:'Discard'}).click();
   await h.page.locator('.table-motion-winning-flight').waitFor({timeout:4000});
-  assert.equal(await h.page.locator('.opponent .end-hand-card').count(),0,'No reveal during the final card flight');
-  await h.page.locator('.opponent .end-hand-flipping').waitFor({timeout:10000});
+  await h.page.locator('.opponent .end-hand-flipping').waitFor({timeout:1500});
+  assert.equal(await h.page.locator('.table-motion-winning-flight').count(),1,'Reveal begins while the winning-card sequence is still flying');
+  assert.equal(await h.page.locator('.table-motion-winning-arrive').count(),0,'Reveal must not wait for landing');
   assert.equal(await h.page.locator('.result-modal').count(),0,'Wait for the flip before covering it with results');
   assert.equal(await h.page.locator('.opponent .end-hand-card').count(),10);
   sameRect(before,await getHandRect(h.page));
@@ -188,7 +189,7 @@ try{
   await h.page.screenshot({path:`${output}/${screen.name}-results.png`,fullPage:true});
   await h.page.getByRole('button',{name:'Close dialog',exact:true}).click();assert.equal(await h.page.locator('.opponent .end-hand-card').count(),10);
   assert.deepEqual(state.errors||[],[]);
-  checks.push({screen:screen.name,ruleLabelsFit:true,flipAtLanding:true,remainingCardsVisible:true,unchangedOpponentRail:true,responsiveResults:true});await h.context.close();
+  checks.push({screen:screen.name,ruleLabelsFit:true,flipAtAnimationStart:true,remainingCardsVisible:true,unchangedOpponentRail:true,responsiveResults:true});await h.context.close();
  }
  await writeFile(`${output}/checks.json`,JSON.stringify({checks,fixtureOnly:true},null,2));console.log('PASS reveal, approval and connected voice scenarios',checks);
 }catch(error){await writeFile(`${output}/checks.json`,JSON.stringify({checks,error:String(error)},null,2));try{await lastPage?.screenshot({path:`${output}/failure.png`,fullPage:true});}catch{}throw error;}

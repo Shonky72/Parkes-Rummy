@@ -27,12 +27,15 @@ type Batch = {
   expiresAt: number;
   stopListening: () => void;
   resolveWinning: (() => void) | null;
+  resolveStarted: (() => void) | null;
   resolveLanding: (() => void) | null;
   retargetWinning: (() => void) | null;
 };
 
 /** Only returned for a new, visible round-winning play. */
 export interface WinningCardPlayback {
+  /** Resolves as the winning-card sequence begins, before flight or landing completes. */
+  started: Promise<void>;
   /** Resolves when the final public card reaches its actual destination. */
   landed: Promise<void>;
   finished: Promise<void>;
@@ -249,6 +252,9 @@ function cleanBatch(batch: Batch): void {
   batch.animations.clear();
   batch.ghosts.clear();
   batch.classes.clear();
+  const started = batch.resolveStarted;
+  batch.resolveStarted = null;
+  started?.();
   const landed = batch.resolveLanding;
   batch.resolveLanding = null;
   landed?.();
@@ -407,6 +413,9 @@ function showWinningAnnouncement(batch: Batch, winnerName: string): void {
   };
   position();
   batch.retargetWinning = position;
+  const notifyStarted = batch.resolveStarted;
+  batch.resolveStarted = null;
+  notifyStarted?.();
   const notifyLanding = batch.resolveLanding;
   batch.resolveLanding = null;
   notifyLanding?.();
@@ -480,6 +489,11 @@ function startFlight(batch: Batch, flight: Flight, destination: Snapshot, elemen
       duration, delay, easing: winning ? 'linear' : 'cubic-bezier(.2,.72,.24,1)', fill: 'both',
     });
     batch.animations.add(animation);
+    if (winning) {
+      const notifyStarted = batch.resolveStarted;
+      batch.resolveStarted = null;
+      notifyStarted?.();
+    }
     let landed = false;
     let lastGeometry = '';
     let missingSince: number | null = null;
@@ -614,10 +628,11 @@ export function animateRoomTransition(previous: PublicRoom | null, next: PublicR
       animations: new Set(), ghosts: new Set(), classes: new Map(),
       expiresAt: performance.now() + (hasWinningPlay ? WINNING_CARD_TIMING.fallback : 1_700),
       stopListening: () => {},
-      resolveWinning: null, resolveLanding: null, retargetWinning: null,
+      resolveWinning: null, resolveStarted: null, resolveLanding: null, retargetWinning: null,
     };
     currentBatch = batch;
     const playback: WinningCardPlayback | null = hasWinningPlay ? {
+      started: new Promise<void>(resolve => { batch.resolveStarted = resolve; }),
       landed: new Promise<void>(resolve => { batch.resolveLanding = resolve; }),
       finished: new Promise<void>(resolve => { batch.resolveWinning = resolve; }),
       cancel: () => cleanBatch(batch),
