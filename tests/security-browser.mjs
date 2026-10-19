@@ -11,7 +11,15 @@ const port=await new Promise(resolve=>{const s=createServer();s.listen(0,'127.0.
 const env={...process.env,PARKES_SECURITY_BUILD:'1',NEXT_PUBLIC_ADS_ENABLED:'true',NEXT_PUBLIC_ADSENSE_CLIENT:'ca-pub-fixture',NEXT_PUBLIC_ADSENSE_SLOT_HOME:'fixture',NEXT_TELEMETRY_DISABLED:'1'};
 async function command(args){await new Promise((resolve,reject)=>{const p=spawn(process.execPath,args,{env,stdio:'inherit',windowsHide:true});p.on('exit',code=>code===0?resolve():reject(new Error(`Build exited ${code}`)));p.on('error',reject);});}
 const generatedInputs=await Promise.all(['tsconfig.json','next-env.d.ts'].map(async path=>[path,await readFile(path)]));
-try{await command(['node_modules/next/dist/bin/next','build']);}
+try{
+ // Other browser suites remove their CI-only page after building .next.
+ // This separate build must not typecheck those stale generated validators.
+ const config=JSON.parse(generatedInputs.find(([path])=>path==='tsconfig.json')[1].toString());
+ config.include=config.include.filter(path=>!path.startsWith('.next/'));
+ config.exclude=[...config.exclude,'.next'];
+ await writeFile('tsconfig.json',JSON.stringify(config,null,2)+'\n');
+ await command(['node_modules/next/dist/bin/next','build']);
+}
 finally{for(const [path,contents] of generatedInputs)await writeFile(path,contents);}
 const server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','-p',String(port),'--hostname','127.0.0.1'],{env,stdio:'inherit',windowsHide:true});
 const base=`http://127.0.0.1:${port}`;
