@@ -1,0 +1,19 @@
+name: Records workbench
+on:
+  push:
+    branches: [feature/rule-records-achievements]
+    paths: [.github/workflows/records-workbench.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - run: git archive HEAD -o /tmp/records-source.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: records-source
+          path: /tmp/records-source.tar
+          retention-days: 1
