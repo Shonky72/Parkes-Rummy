@@ -36,3 +36,5 @@
 a.brand{text-decoration:none;cursor:pointer}
 a.brand:hover .brand-mark{filter:drop-shadow(0 0 8px rgba(248,213,132,.55))}
 a.brand:focus-visible{border-radius:8px;outline:3px solid var(--aqua);outline-offset:5px}
+
+.approval-panel{padding:20px;margin:12px 0}.approval-panel h2{font-size:21px;margin-bottom:12px}.approval-panel p{line-height:1.5;margin:12px 0}.approval-request{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}.approval-request strong{flex:1;min-width:100px;overflow-wrap:anywhere}

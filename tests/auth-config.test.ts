@@ -28,6 +28,6 @@ test('the unconfigured session/config endpoints remain usable without database a
   const api = createRoomHandlers({ configured: () => false, resolveSession: async () => null });
   const response = await api.accountSessionRequest(new Request('https://parkesrummy.com/api/account/session'));
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { configured: false, user: null });
+  const data=await response.json();assert.equal(data.configured,false);assert.equal(data.user,null);assert.equal(data.accessAdmin,false);assert.ok(Object.values(data.entitlements).every(value=>value===false));
   assert.deepEqual(await api.accountConfigRequest().json(), { enabled: false });
 });

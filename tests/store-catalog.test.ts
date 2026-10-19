@@ -9,7 +9,7 @@ test('store uses owner-approved one-off prices',()=>{
   assert.equal(STORE_PRODUCTS.everything_pack.amount,599);
 });
 test('everything pack grants every premium entitlement',()=>{
-  assert.deepEqual([...STORE_PRODUCTS.everything_pack.grants],['remove_ads','premium_fonts','premium_symbols','voice_chat']);
+  assert.deepEqual([...STORE_PRODUCTS.everything_pack.grants],['remove_ads','premium_fonts','premium_symbols','voice_chat','original_rules']);
 });
 test('catalog has twenty premium fonts and forty premium symbols',()=>{
   assert.equal(Object.keys(FONT_STYLES).length-1,20);

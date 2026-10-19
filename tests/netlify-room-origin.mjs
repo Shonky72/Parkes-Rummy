@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { ROOM_PROTOCOL } from '../lib/room-protocol.ts';
 
 /**
  * Safe smoke probes for the Netlify Next.js route handler.
@@ -10,7 +11,7 @@ const pull = process.env.NETLIFY_PR_NUMBER;
 if (!pull || !/^\d+$/.test(pull)) throw new Error('NETLIFY_PR_NUMBER is required.');
 const base = 'https://deploy-preview-' + pull + '--parkes-rummy.netlify.app';
 const path = '/api/rooms';
-const headers = { 'Content-Type': 'text/plain', 'X-Parkes-Protocol': 'multi-game-turns-v6' };
+const headers = { 'Content-Type': 'text/plain', 'X-Parkes-Protocol': ROOM_PROTOCOL };
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 let ready = false;
@@ -55,5 +56,18 @@ try {
   assert.ok(deniedPage.includes('Owner access required'), 'Server page must deny anonymous access');
   assert.ok(!deniedPage.includes('People online'), 'Private dashboard is not server-rendered for guests');
   assert.equal((await fetch(base + '/activity-ui-fixture')).status, 404, 'CI-only fixture must never ship to Netlify');
+  const htmlResponse=await fetch(base+'/');
+  assert.match(htmlResponse.headers.get('content-security-policy')||'',/nonce-/);
+  assert.equal(htmlResponse.headers.get('x-frame-options'),'DENY');
+  // Invalid codes are rejected before loading any real room. Only quota rows
+  // are touched; rotate untrusted headers to verify Netlify's IP trust boundary.
+  let throttled=false;
+  const run=Date.now().toString(36);
+  for(let i=0;i<13;i++){
+    const probe=await fetch(`${base}/api/rooms/invalid-${run}-${i}/preview`,{headers:{'x-vercel-forwarded-for':`192.0.2.${i+1}`,'x-forwarded-for':`192.0.2.${i+1}`}});
+    if(probe.status===429){assert.ok(Number(probe.headers.get('retry-after'))>0);throttled=true;break;}
+    assert.equal(probe.status,400,'Trusted client-IP forwarding failed or invalid-code probe read a room');
+  }
+  assert.ok(throttled,'Rotating caller-supplied forwarding headers must not bypass the distinct-code limit');
   console.log('Netlify preview verified:', { sameOriginStatus: sameOrigin.status, canonicalOriginStatus: canonicalOrigin.status, crossSiteStatus: forbidden.status, privateActivityStatus: activity.status, fixtureAbsent: true });
 } finally { await browser.close(); }

@@ -1,9 +1,12 @@
+import {boundedText} from './request-body';
 import { PostgresRoomRepository, type RoomRecord, type RoomRepository } from '../db/room-repository';
 import { DatabaseUnavailableError } from '../db';
+import { requestSecurity, securityFailure, type RequestSecurity } from '../db/security';
+import { PostgresJoinRequests } from '../db/join-requests';
 import { getEntitlements, getPlayerProfile, isFullAccessAdmin } from '../db/entitlements';
 import { resolveAccountUser } from './auth';
 import { readAuthConfig, accountMarker, ACCOUNT_IDENTITY_HEADER, type AccountUser } from './auth-config';
-import { applyAction, createPlayer, createRoom, lastMoveAtFor, publicRoom, roomPreview, ruleNumberFor } from './rummy';
+import { applyAction, createPlayer, createRoom, lastMoveAtFor, publicRoom, ruleNumberFor } from './rummy';
 import { chooseQuickPlaySetup } from './quick-play';
 import { advanceBotTurn } from './bot-turn';
 import { isRoomCode, normalizeRoomCode, ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from './room-code';
@@ -91,7 +94,7 @@ async function bodyOf(request: Request): Promise<Record<string, unknown>> {
   requireSameOrigin(request);
   if (!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json')) throw new ApiError('Send a game request as JSON.', 415);
   if (Number(request.headers.get('Content-Length') ?? 0) > 16_384) throw new ApiError('This request is too large.', 413);
-  const raw = await request.text();
+  const raw = await boundedText(request,16_384);
   if (new TextEncoder().encode(raw).byteLength > 16_384) throw new ApiError('This request is too large.', 413);
   try {
     const value = JSON.parse(raw);
@@ -102,6 +105,8 @@ async function bodyOf(request: Request): Promise<Record<string, unknown>> {
 async function handle(work: () => Promise<Response>): Promise<Response> {
   try { return await work(); }
   catch (error) {
+    const securityResponse = securityFailure(error);
+    if (securityResponse) return securityResponse;
     if (error instanceof ApiError) return reply({ error: error.message, ...(error.code ? { code: error.code } : {}) }, error.status);
     if (error instanceof DatabaseUnavailableError) return reply({ error: error.message }, 503);
     if (error instanceof Error && error.name === 'GameError') return reply({ error: error.message }, 400);
@@ -181,7 +186,11 @@ function roomSummary(room: RoomState, player: PlayerState): RoomSummary {
 
 
 
-export function createRoomHandlers(options: { repository?: RoomRepository; resolveSession?: SessionResolver; configured?: () => boolean } = {}) {
+export function createRoomHandlers(options: { repository?: RoomRepository; resolveSession?: SessionResolver; configured?: () => boolean; security?: RequestSecurity; joins?: PostgresJoinRequests; entitlements?: typeof getEntitlements; profile?: typeof getPlayerProfile } = {}) {
+  const security = options.security ?? requestSecurity;
+  const joins = options.joins ?? new PostgresJoinRequests();
+  const entitlementsFor = options.entitlements ?? getEntitlements;
+  const profileFor = options.profile ?? getPlayerProfile;
   const repository = options.repository ?? new PostgresRoomRepository();
   const resolveSession = options.resolveSession ?? resolveAccountUser;
   const configured = options.configured ?? (() => readAuthConfig() !== null);
@@ -195,26 +204,19 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
     if (!identity.user) identityChanged();
     return identity as Identity & { user: AccountUser };
   }
-  async function checkCreationRate(identity: Identity, request: Request) {
-    const ip = request.headers.get('x-vercel-forwarded-for') ?? request.headers.get('x-forwarded-for')?.split(',')[0].trim();
-    const source = identity.user ? `account:${identity.user.id}` : ip ? `ip:${ip}` : null;
-    if (source && !await repository.consumeCreationLimit(await hashToken(source), Date.now())) {
-      throw new ApiError('Please use your existing room or wait a few minutes before creating another.', 429);
-    }
-  }
   return {
     createRoomRequest: (request: Request) => handle(async () => {
       requireCurrentProtocol(request);
       const body = await bodyOf(request);
       const identity = await identityFor(request, resolveSession);
       const name = cleanName(body.name);
-      await checkCreationRate(identity, request);
+      await security.check(request, 'create', identity.user?.id);
       const token = identity.user ? accountMarker(identity.user.id) : newToken();
       const playerId = crypto.randomUUID();
       const tokenHash = identity.user ? `account:${crypto.randomUUID()}` : await hashToken(token);
-      const profile = identity.user ? await getPlayerProfile(identity.user.id) : { font:'default', symbol:'initials' } as const;
+      const profile = identity.user ? await profileFor(identity.user.id) : { font:'default', symbol:'initials' } as const;
       // The server picks all Quick Play options. A browser never chooses or claims paid Original Rules.
-      const quickPlay = body.quickPlay === true ? chooseQuickPlaySetup(identity.user ? (await getEntitlements(identity.user.id)).originalRules : false) : null;
+      const quickPlay = body.quickPlay === true ? chooseQuickPlaySetup(identity.user ? (await entitlementsFor(identity.user.id)).originalRules : false) : null;
       const host = createPlayer({ id: playerId, name, tokenHash, color: 0, fontId: profile.font, symbolId: profile.symbol });
       const membership = identity.user ? { userId: identity.user.id, playerId } : undefined;
       for (let attempt = 0; attempt < 8; attempt++) {
@@ -232,11 +234,13 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
       }
       throw new ApiError('A room code is taking a moment. Please try again.', 503);
     }),
-    roomPreviewRequest: (_request: Request, rawCode: string) => handle(async () => {
+    roomPreviewRequest: (request: Request, rawCode: string) => handle(async () => {
+      await security.check(request, 'preview', undefined, rawCode);
       const { room } = await load(codeOf(rawCode));
-      return reply({ preview: roomPreview(room) });
+      return reply({ preview: { code:room.code, game:room.game, status:room.status, playerCount:room.players.length, showMoveHints:room.showMoveHints!==false, ...(room.quickPlay?{quickPlay:room.quickPlay}:{}) } });
     }),
     readRoomRequest: (request: Request, rawCode: string) => handle(async () => {
+      await security.check(request, 'read');
       const [identity, record] = await Promise.all([identityFor(request, resolveSession), load(codeOf(rawCode))]);
       const player = await authorizedPlayer(record, identity);
       return reply({ room: publicRoom(record.room, player.id) });
@@ -245,6 +249,7 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
       requireCurrentProtocol(request);
       const body = await bodyOf(request);
       const identity = await identityFor(request, resolveSession);
+      await security.check(request, 'read', identity.user?.id);
       if (!Array.isArray(body.seats) || body.seats.length > 32) throw new ApiError('Choose up to 32 saved games.');
       const lookups = new Map<string, ReturnType<typeof load>>();
       const summaries = await Promise.all(body.seats.map(async (value: unknown): Promise<RoomSummaryResult> => {
@@ -273,11 +278,15 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
       requireCurrentProtocol(request);
       const body = await bodyOf(request);
       const identity = await identityFor(request, resolveSession);
+      await security.check(request, 'join', identity.user?.id, rawCode);
       const code = codeOf(rawCode);
       if (typeof body.token === 'string' && body.token.startsWith('account:') && body.token !== (identity.user ? accountMarker(identity.user.id) : 'guest')) identityChanged();
-      const priorToken = !identity.user && typeof body.token === 'string' && /^[a-f0-9]{64}$/.test(body.token) ? body.token : null;
+      const candidateToken = body.token ?? body.requestToken;
+      const priorToken = !identity.user && typeof candidateToken === 'string' && /^[a-f0-9]{64}$/.test(candidateToken) ? candidateToken : null;
       const priorHash = priorToken ? await hashToken(priorToken) : null;
-      const token = identity.user ? accountMarker(identity.user.id) : newToken();
+      const proof = typeof body.requestToken === 'string' && /^[a-f0-9]{64}$/.test(body.requestToken) ? body.requestToken : priorToken;
+      if (!identity.user && !proof) throw new ApiError('Refresh the invitation to request a seat.');
+      const token = identity.user ? accountMarker(identity.user.id) : proof!;
       const playerId = crypto.randomUUID();
       const tokenHash = identity.user ? `account:${crypto.randomUUID()}` : await hashToken(token);
       for (let attempt = 0; attempt < 8; attempt++) {
@@ -286,7 +295,7 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
         if (identity.user) {
           const prior = accountPlayer(record, identity.user.id);
           if (prior) {
-            const profile = await getPlayerProfile(identity.user.id);
+            const profile = await profileFor(identity.user.id);
             prior.fontId = profile.font; prior.symbolId = profile.symbol;
             room.version = version + 1; room.updatedAt = Date.now();
             if (!await repository.save(room, version)) continue;
@@ -301,21 +310,55 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
         if (room.status !== 'lobby') throw new ApiError('This game has started. Sign in to your account or reopen your saved seat to return.', 409);
         if (room.players.length >= 8) throw new ApiError('This table has eight players. Ask the host to free a seat.', 409);
         const name = cleanName(body.name);
-        if (room.players.some(player => player.name.toLocaleLowerCase() === name.toLocaleLowerCase())) throw new ApiError('Someone at this table already uses that name. Choose another name.');
-        const color = Array.from({ length: 8 }, (_, i) => i).find(i => !room.players.some(player => player.color === i)) ?? room.players.length;
-        const profile = identity.user ? await getPlayerProfile(identity.user.id) : { font:'default', symbol:'initials' } as const;
-        room.players.push(createPlayer({ id: playerId, name, tokenHash, color, fontId: profile.font, symbolId: profile.symbol }));
-        room.lastMoveAt = lastMoveAtFor(room);
-        room.events.push({ id: (room.events.at(-1)?.id ?? 0) + 1, type: 'join', playerId, text: `${name} joined the table`, at: Date.now() });
-        room.events = room.events.slice(-40);
-        room.version = version + 1;
-        room.updatedAt = Date.now();
-        const membership = identity.user ? { userId: identity.user.id, playerId } : undefined;
-        if (await repository.save(room, version, membership)) return reply({ room: publicRoom(room, playerId), token });
+        const profile = identity.user ? await profileFor(identity.user.id) : {font:'default',symbol:'initials'} as const;
+        const actor = identity.user ? accountMarker(identity.user.id) : await hashToken(token);
+        const pending = await joins.submit(code,room.createdAt,actor,identity.user?.id??null,
+          createPlayer({id:playerId,name,tokenHash,color:0,fontId:profile.font,symbolId:profile.symbol}));
+        if(pending.status==='declined')throw new ApiError('The host declined your request. Please wait before requesting again.',403);
+        // An old approval cannot admit a removed player again.
+        if(pending.status==='approved')throw new ApiError('This seat was removed. Please wait before requesting again.',403);
+        return reply({pending:{id:pending.id,status:pending.status,expiresAt:Number(pending.expires_at)}},202);
       }
       throw new ApiError('Someone else joined at the same moment. Please tap Join game again.', 409);
     }),
+    joinRequestsRequest: (request: Request, rawCode: string) => handle(async () => {
+      requireCurrentProtocol(request);
+      const identity=await identityFor(request,resolveSession);
+      await security.check(request,'requests',identity.user?.id);
+      const code=codeOf(rawCode), record=await load(code);
+      if(new URL(request.url).searchParams.get('own')==='true'){
+        const actor=identity.user?accountMarker(identity.user.id):identity.token&&/^[a-f0-9]{64}$/.test(identity.token)?await hashToken(identity.token):null;
+        if(!actor)throw new ApiError('Your request is unavailable.',401);
+        const entry=await joins.own(code,record.room.createdAt,actor);
+        return reply({request:entry&&!(entry.status==='pending'&&record.room.status!=='lobby')?{id:entry.id,status:entry.status,expiresAt:Number(entry.expires_at)}:null});
+      }
+      const host=await authorizedPlayer(record,identity);
+      if(host.id!==record.room.hostId)throw new ApiError('Only the host reviews requests.',403);
+      const entries=await joins.list(code,record.room.createdAt);
+      return reply({requests:entries.map(e=>({id:e.id,name:(JSON.parse(e.player) as PlayerState).name,expiresAt:Number(e.expires_at)}))});
+    }),
+    reviewJoinRequest: (request: Request, rawCode: string) => handle(async () => {
+      requireCurrentProtocol(request);
+      const body=await bodyOf(request), identity=await identityFor(request,resolveSession);
+      await security.check(request,'requests',identity.user?.id);
+      const code=codeOf(rawCode), record=await load(code);
+      const host=await authorizedPlayer(record,identity);
+      if(host.id!==record.room.hostId)throw new ApiError('Only the host reviews requests.',403);
+      if(typeof body.id!=='string'||body.id.length>100||!['approve','decline'].includes(String(body.decision)))throw new ApiError('Choose a request and decision.');
+      const status=await joins.decide(code,record.room.createdAt,host.id,body.id,body.decision==='approve');
+      return reply({status});
+    }),
+    cancelJoinRequest: (request: Request, rawCode: string) => handle(async () => {
+      requireCurrentProtocol(request);requireSameOrigin(request);
+      const identity=await identityFor(request,resolveSession);
+      await security.check(request,'requests',identity.user?.id);
+      const code=codeOf(rawCode), record=await load(code);
+      const actor=identity.user?accountMarker(identity.user.id):identity.token&&/^[a-f0-9]{64}$/.test(identity.token)?await hashToken(identity.token):null;
+      if(!actor)throw new ApiError('Your request is unavailable.',401);
+      await joins.cancel(code,record.room.createdAt,actor);return reply({ok:true});
+    }),
     actionRoomRequest: (request: Request, rawCode: string) => handle(async () => {
+      await security.check(request, 'action');
       requireCurrentProtocol(request);
       const body = await bodyOf(request);
       const code = codeOf(rawCode);
@@ -335,7 +378,7 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
         if ((action.type === 'setGame' && action.game === 4) || (action.type === 'start' && room.game === 4)) {
           if (player.id !== room.hostId) throw new ApiError('Only the host controls this setting.', 403);
           if (!identity.user) throw new ApiError('Sign in and unlock Original Rules to host this ruleset. Guests can join free.', 403);
-          const entitlements = await getEntitlements(identity.user.id);
+          const entitlements = await entitlementsFor(identity.user.id);
           if (!entitlements.originalRules) throw new ApiError('Original Rules is a one-off A$0.99 host unlock. Guests can join your table without buying it.', 403);
         }
         if (action.type === 'goDown') {
@@ -362,6 +405,7 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
       throw new ApiError('The table changed while you played. Please try once more.', 409);
     }),
     deleteRoomRequest: (request: Request, rawCode: string) => handle(async () => {
+      await security.check(request,'action');
       requireCurrentProtocol(request);
       const body = await bodyOf(request);
       const identity = await identityFor(request, resolveSession);
@@ -375,13 +419,15 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
     }),
     accountSessionRequest: (request: Request) => handle(async () => {
       if (request.headers.get('Sec-Fetch-Site') === 'cross-site') throw new ApiError('Open this game directly to continue.', 403);
+      if(configured())await security.check(request,'read');
       const user = await resolveSession(request);
-      const [entitlements, profile] = user ? await Promise.all([getEntitlements(user.id), getPlayerProfile(user.id)]) : [ { removeAds:false, premiumFonts:false, premiumSymbols:false, voiceChat:false, originalRules:false }, { font:'default', symbol:'initials' } ];
+      const [entitlements, profile] = user ? await Promise.all([entitlementsFor(user.id), profileFor(user.id)]) : [ { removeAds:false, premiumFonts:false, premiumSymbols:false, voiceChat:false, originalRules:false }, { font:'default', symbol:'initials' } ];
       return reply({ configured: configured(), user, entitlements, accessAdmin: Boolean(user && isFullAccessAdmin(user.email)), profile });
     }),
     accountConfigRequest: () => reply({ enabled: configured() }),
     accountGamesRequest: (request: Request) => handle(async () => {
       const identity = await accountIdentity(request);
+      await security.check(request,'read',identity.user.id);
       const records = await repository.listForAccount(identity.user.id);
       const games = records.flatMap(record => {
         const player = accountPlayer(record, identity.user.id);
@@ -394,6 +440,7 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
       requireSameOrigin(request);
       const identity = await accountIdentity(request);
       const code = codeOf(rawCode);
+      await security.check(request,'action',identity.user.id);
       // Idempotent and scoped to this identity. Does not delete another person's game.
       await repository.setHidden(code, identity.user.id, true);
       return reply({ ok: true });
@@ -403,6 +450,6 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
 
 export const {
   createRoomRequest, roomPreviewRequest, readRoomRequest, listRoomSummariesRequest,
-  joinRoomRequest, actionRoomRequest, deleteRoomRequest,
+  joinRoomRequest, joinRequestsRequest, reviewJoinRequest, cancelJoinRequest, actionRoomRequest, deleteRoomRequest,
   accountSessionRequest, accountConfigRequest, accountGamesRequest, removeAccountGameRequest,
 } = createRoomHandlers();

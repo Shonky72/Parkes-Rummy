@@ -1,3 +1,5 @@
+import AdvertisingConsent from './components/AdvertisingConsent';
+import { headers } from 'next/headers';
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import './hand-interactions.css';
@@ -27,6 +29,7 @@ import NetlifyBadgeDock from './components/NetlifyBadgeDock';
 
 export const metadata: Metadata = {
   title: 'Parkes Rummy',
+  other: { 'google-adsense-account': process.env.NEXT_PUBLIC_ADSENSE_CLIENT?.trim() || 'ca-pub-5430752526720484' },
   authors: [{ name: 'IBD Collective' }],
   creator: 'IBD Collective',
   description: 'Your table, your friends, your house rules. Play Parkes Rummy together in your browser. Up to eight players, ten rules, and twos are wild.',
@@ -35,16 +38,17 @@ export const metadata: Metadata = {
   icons: { icon: '/favicon.svg', shortcut: '/favicon.svg', apple: [{ url: '/app-icon/180.png', sizes: '180x180', type: 'image/png' }] },
 };
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#062c22' };
-const ADSENSE_VERIFICATION_CLIENT = process.env.NEXT_PUBLIC_ADSENSE_CLIENT?.trim() || 'ca-pub-5430752526720484';
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // Dynamic rendering gives each HTML response its own CSP nonce. Next reads
+  // the forwarded CSP and applies that nonce to its inline bootstrap scripts.
+  const nonce=(await headers()).get('x-nonce')||'';
   return <html lang="en-AU">
     <head>
       <link rel="preconnect" href="https://fonts.googleapis.com"/>
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous"/>
       <link rel="stylesheet" href={fontCssUrl()}/>
-      <script async src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_VERIFICATION_CLIENT}`} crossOrigin="anonymous"/>
     </head>
-    <body><InstallSupport>{children}<HomeInformation/><NetlifyBadgeDock/></InstallSupport></body>
+    <body><AdvertisingConsent nonce={nonce}><InstallSupport>{children}<HomeInformation/><NetlifyBadgeDock/></InstallSupport></AdvertisingConsent></body>
   </html>;
 }

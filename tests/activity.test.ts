@@ -1,3 +1,5 @@
+import {createHmac} from 'node:crypto';
+import {PostgresRequestSecurity} from '../db/security';
 import test,{before,after} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -22,8 +24,10 @@ const unverified:AccountUser={id:'unverified',email:'dan@ibdcollective.net',name
 const bearer='d'.repeat(64);
 const uuid=()=>crypto.randomUUID();
 const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
-const API=(user:AccountUser|null)=>createActivityHandlers({db,activity,rooms,resolveSession:async()=>user});
-const req=(body:unknown,identity='guest',token?:string,origin='https://parkesrummy.com')=>new Request('https://internal--parkes-rummy.netlify.app:80/api/activity/presence',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','X-Parkes-Identity':identity,...(token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify(body)});
+process.env.BETTER_AUTH_SECRET='activity-fixture-secret-is-not-production-123456';
+const cookie=(body:unknown)=>{const id=(body as {guestId?:string})?.guestId||crypto.randomUUID();return `parkes-activity-visitor=${id}.${createHmac('sha256',process.env.BETTER_AUTH_SECRET!).update(`activity:${id}`).digest('hex')}`;};
+const API=(user:AccountUser|null)=>createActivityHandlers({db,activity,rooms,security:new PostgresRequestSecurity(db),resolveSession:async()=>user});
+const req=(body:unknown,identity='guest',token?:string,origin='https://parkesrummy.com')=>new Request('https://internal--parkes-rummy.netlify.app:80/api/activity/presence',{method:'POST',headers:{Cookie:cookie(body),'x-nf-client-connection-ip':'192.0.2.20',Origin:origin,'Content-Type':'application/json','X-Parkes-Identity':identity,...(token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify(body)});
 const record=(id:string,userId:string|null=null,place:PresenceRecord['place']='home',roomCode:string|null=null):PresenceRecord=>({sessionKey:hash(id),actorKey:hash(userId||id),userId,name:id,place,roomCode});
 before(async()=>{
   await pg.query(await readFile(new URL('../db/schema-editor.sql',import.meta.url),'utf8'));

@@ -1,3 +1,6 @@
+import {boundedJson} from './request-body';
+import { secureRoute } from './secure-route';
+import { accountMarker } from './auth-config';
 import { database } from '../db';
 import { resolveAccountUser } from './auth';
 import { ensureStoreSchema, hasEntitlement, VOICE_CHAT_ENTITLEMENT } from '../db/entitlements';
@@ -8,7 +11,6 @@ type SignalKind = 'offer' | 'answer' | 'candidate';
 const PRESENCE_TTL = 30_000;
 const SIGNAL_TTL = 90_000;
 function reply(value: unknown, status = 200) { return Response.json(value, { status, headers: { 'Cache-Control':'no-store' } }); }
-function sameOrigin(request: Request) { return request.headers.get('Origin') === new URL(request.url).origin && request.headers.get('Sec-Fetch-Site') !== 'cross-site'; }
 function codeOf(value: unknown) { const code = typeof value === 'string' ? normalizeRoomCode(value) : ''; if (!isRoomCode(code)) throw new Error('ROOM'); return code; }
 async function member(userId: string, code: string) {
   const result = await database.query<{ player_id:string; state:string }>(
@@ -68,13 +70,14 @@ async function iceServers() {
   if (url && username && credential) servers.push({ urls:url, username, credential });
   return servers;
 }
-export async function voiceRequest(request: Request) {
-  await ensureStoreSchema();
-  if (!sameOrigin(request)) return reply({ error:'Open Parkes Rummy directly to continue.' }, 403);
+async function handleVoice(request: Request) {
+
   const user = await resolveAccountUser(request);
   if (!user) return reply({ error:'Sign in to use table voice.' }, 401);
+  if(request.headers.get('X-Parkes-Identity')!==accountMarker(user.id))return reply({error:'Your account changed.'},401);
+  await ensureStoreSchema();
   if (!await hasEntitlement(user.id, VOICE_CHAT_ENTITLEMENT)) return reply({ error:'Voice Chat is not owned on this account.' }, 403);
-  const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+  const body = await boundedJson(request,32_768);
   const action = body.action as VoiceAction;
   let code = '';
   try { code = codeOf(body.code); } catch { return reply({ error:'Choose a valid room.' }, 400); }
@@ -94,7 +97,8 @@ export async function voiceRequest(request: Request) {
   );
   if (action === 'block') {
     const other = typeof body.playerId === 'string' ? body.playerId : '';
-    if (!other || other === membership.playerId) return reply({ error:'Choose another player.' }, 400);
+    const actualPeer=await database.query('SELECT 1 FROM voice_presence WHERE room_code=$1 AND player_id=$2',[code,other]);
+    if (!actualPeer.rows.length || !other || other === membership.playerId) return reply({ error:'Choose another player.' }, 400);
     const blocked = body.blocked === true;
     if (blocked) await database.query(
       `INSERT INTO voice_blocks (room_code, blocker_player_id, blocked_player_id, created_at) VALUES ($1,$2,$3,$4)
@@ -134,3 +138,5 @@ export async function voiceRequest(request: Request) {
   const latestSignalId = signals.rows.reduce((max,row)=>Math.max(max,Number(row.id)||0),since);
   return reply({ playerId:membership.playerId, peers, blockedPlayerIds:blocked, signals:signals.rows.map(row=>({id:Number(row.id),from:row.sender_player_id,kind:row.kind,payload:row.payload})), latestSignalId, iceServers:action==='join'?await iceServers():undefined });
 }
+
+export const voiceRequest=secureRoute('voice',handleVoice);

@@ -1,3 +1,6 @@
+import {activityVisitor} from './activity-visitor';
+import {boundedText} from './request-body';
+import { requestSecurity, securityFailure, type RequestSecurity } from '../db/security';
 import { createHash } from 'node:crypto';
 import { database, type SqlDatabase } from '../db';
 import { ActivityRepository, activityRepository, activityHash } from '../db/activity';
@@ -21,9 +24,10 @@ export async function isActivityOwner(user:AccountUser|null, db:SqlDatabase=data
     AND EXISTS(SELECT 1 FROM "account" a WHERE a."userId"=u.id AND a."providerId"='google') LIMIT 1`,[user.id,ACTIVITY_OWNER_EMAIL]);
   return result.rows.length === 1;
 }
-export function createActivityHandlers(options:{resolveSession?:Resolver; db?:SqlDatabase; activity?:ActivityRepository; rooms?:RoomRepository}={}) {
+export function createActivityHandlers(options:{resolveSession?:Resolver; db?:SqlDatabase; activity?:ActivityRepository; rooms?:RoomRepository; security?:RequestSecurity}={}) {
   const resolve = options.resolveSession??resolveAccountUser;
   const db = options.db??database;
+  const security=options.security??requestSecurity;
   const activity = options.activity??activityRepository;
   const rooms = options.rooms??new PostgresRoomRepository();
   return {
@@ -41,19 +45,21 @@ export function createActivityHandlers(options:{resolveSession?:Resolver; db?:Sq
         if (!isAllowedRoomWriteOrigin(request)) return error(403,'Open Parkes Rummy directly.');
         if (!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json')) return error(415,'JSON required.');
         if (Number(request.headers.get('Content-Length')??0)>2048) return error(413,'Request too large.');
-        const raw = await request.text();
+        const raw = await boundedText(request,2048);
         if (new TextEncoder().encode(raw).length>2048) return error(413,'Request too large.');
         let pulse:unknown;
         try { pulse=JSON.parse(raw); } catch { return error(400,'Invalid presence.'); }
         if (!validActivityPulse(pulse)) return error(400,'Invalid presence.');
+        await security.check(request,'presence');
         const user = await resolve(request);
         const identity = user?accountMarker(user.id):'guest';
         if (request.headers.get(ACCOUNT_IDENTITY_HEADER)!==identity) return error(401,'Your account changed.');
-        const actorKey = activityHash(user?`account:${user.id}`:`guest:${pulse.guestId}`);
+        const visitor=user?null:activityVisitor(request);
+        const actorKey = activityHash(user?`account:${user.id}`:`guest:${visitor!.id}`);
         const sessionKey = activityHash(`${actorKey}:${pulse.tabId}`);
         if (!pulse.visible) {
           await activity.leave(sessionKey,actorKey);
-          return new Response(null,{status:204,headers:privateHeaders});
+          return new Response(null,{status:204,headers:{...privateHeaders,...(visitor?.cookie?{'Set-Cookie':visitor.cookie}:{})}});
         }
         let name = user?.name||pulse.name?.trim().replace(/[\u0000-\u001f\u007f]/g,'').slice(0,24)||'Guest';
         let place:ActivityPlace='home';
@@ -71,8 +77,8 @@ export function createActivityHandlers(options:{resolveSession?:Resolver; db?:Sq
           place=record.room.status==='playing'?'playing':record.room.status==='lobby'?'lobby':'results';
         }
         await activity.pulse({sessionKey,actorKey,userId:user?.id??null,name,roomCode:code,place});
-        return new Response(null,{status:204,headers:privateHeaders});
-      } catch { return error(503,'Activity is unavailable for the moment.'); }
+        return new Response(null,{status:204,headers:{...privateHeaders,...(visitor?.cookie?{'Set-Cookie':visitor.cookie}:{})}});
+      } catch(e) { return securityFailure(e)??error(503,'Activity is unavailable for the moment.'); }
     },
   };
 }

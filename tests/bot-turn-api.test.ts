@@ -1,3 +1,4 @@
+import {PostgresRequestSecurity} from '../db/security';
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -19,7 +20,7 @@ function connection(target: Pick<PGlite | Transaction, 'query'>): SqlConnection 
 }
 const db: SqlDatabase = { ...connection(pg), transaction: work => pg.transaction(tx => work(connection(tx))) };
 const repository = new PostgresRoomRepository(db);
-const api = createRoomHandlers({ repository, resolveSession: async () => null, configured: () => true });
+const api = createRoomHandlers({ repository,security:new PostgresRequestSecurity(db), resolveSession: async () => null, configured: () => true });
 before(async () => { await pg.query(await readFile(new URL('../db/schema-editor.sql', import.meta.url), 'utf8')); });
 after(async () => { await pg.close(); });
 const token = 'a'.repeat(64);

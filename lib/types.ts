@@ -117,3 +117,5 @@ export type GameAction =
   | { type: 'layoff'; cardId: string; meldId: string; end: 'start' | 'end' }
   | { type: 'layoffMany'; cardIds: string[]; meldId: string; end: 'start' | 'end' }
   | { type: 'discard'; cardId: string };
+
+export type InvitationPreview=Omit<RoomPreview,'hostName'|'players'>;

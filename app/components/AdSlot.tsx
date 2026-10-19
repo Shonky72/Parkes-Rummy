@@ -1,4 +1,5 @@
 'use client';
+import { useAdvertising } from './AdvertisingConsent';
 
 import { useEffect, useRef } from 'react';
 import type { AdSurface } from '../../lib/monetization';
@@ -14,18 +15,20 @@ const slotIds: Record<AdSurface, string | undefined> = {
 
 export default function AdSlot({ surface, adFree, activePlay = false }: { surface: AdSurface; adFree: boolean; activePlay?: boolean }) {
   const pushed = useRef(false);
+  const {allowed,nonce}=useAdvertising();
   const client = process.env.NEXT_PUBLIC_ADSENSE_CLIENT;
   const slot = slotIds[surface];
   const enabled = process.env.NEXT_PUBLIC_ADS_ENABLED === 'true';
-  const visible = enabled && Boolean(client && slot) && shouldShowAds({ adFree, surface, activePlay });
+  const visible = allowed && enabled && Boolean(client && slot) && shouldShowAds({ adFree, surface, activePlay });
   useEffect(() => {
     if (!visible || pushed.current) return;
     try {
+      if(!document.getElementById('parkes-advertising-script')){const script=document.createElement('script');script.id='parkes-advertising-script';script.nonce=nonce;script.async=true;script.crossOrigin='anonymous';script.src=`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(client!)}`;document.head.append(script);}
       const w = window as typeof window & { adsbygoogle?: unknown[] };
       (w.adsbygoogle ||= []).push({});
       pushed.current = true;
     } catch { /* Ad provider retries on the next page view. */ }
-  }, [visible]);
+  }, [visible,client,nonce]);
   if (!visible) return null;
   return <aside className={`ad-slot ad-slot-${surface}`} aria-label="Advertisement">
     <span className="ad-label">Advertisement</span>

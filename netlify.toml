@@ -1,9 +1,10 @@
 [build]
-  command = "npm run build"
+  command = "npm ci --ignore-scripts && npm run build"
   publish = ".next"
 
 [build.environment]
   NODE_VERSION = "24"
+  NPM_FLAGS = "--ignore-scripts"
 
 [[headers]]
   for = "/ads.txt"

@@ -3,16 +3,7 @@ import { useEffect, useRef } from 'react';
 import { getClientIdentity } from '../../lib/client-identity';
 import { ACTIVITY_INTERVAL_MS } from '../../lib/activity-types';
 
-const GUEST_KEY = 'parkes-rummy:activity-guest-v1';
-function guestIdentity():string {
-  try {
-    const saved = JSON.parse(localStorage.getItem(GUEST_KEY)||'null');
-    if (saved && /^[a-f0-9-]{36}$/i.test(saved.id) && Number(saved.expires)>Date.now()) return saved.id;
-    const id=crypto.randomUUID();
-    localStorage.setItem(GUEST_KEY,JSON.stringify({id,expires:Date.now()+30*86400000}));
-    return id;
-  } catch { return crypto.randomUUID(); }
-}
+function guestIdentity(){return crypto.randomUUID();}
 /** Foreground-only operational presence. No display, card actions or account state changes. */
 export default function ActivityPresence({roomCode,token,name,accountId}:{roomCode?:string;token?:string;name:string;accountId:string|null}) {
   const current=useRef({roomCode,token,name}); current.current={roomCode,token,name};
@@ -23,11 +14,12 @@ export default function ActivityPresence({roomCode,token,name,accountId}:{roomCo
     const guest=guestId.current;
     let disposed=false,timer:ReturnType<typeof setTimeout>|undefined,failures=0,inFlight=false;
     let controller:AbortController|null=null;
+    let retryAt=0;
     const identity=getClientIdentity();
     if (!identity.ready) return;
     const initial={...current.current};
     async function send(visible:boolean) {
-      if (visible && (disposed || document.hidden || !navigator.onLine || inFlight)) return;
+      if (visible && (Date.now()<retryAt || disposed || document.hidden || !navigator.onLine || inFlight)) return;
       const latest=visible?current.current:initial;
       const headers:Record<string,string>={'Content-Type':'application/json','X-Parkes-Identity':identity.key};
       if (latest.token) headers.Authorization=`Bearer ${latest.token}`;
@@ -44,11 +36,12 @@ export default function ActivityPresence({roomCode,token,name,accountId}:{roomCo
         const response=await fetch('/api/activity/presence',{method:'POST',headers,body,credentials:'same-origin',cache:'no-store',signal:requestController.signal});
         // The endpoint is a small 204/error response; release its body before another check-in.
         await response.arrayBuffer();
+        if(response.status===429)retryAt=Date.now()+Math.min(300,Number(response.headers.get('Retry-After'))||60)*1000;
         failures=response.ok?0:Math.min(failures+1,4);
       } catch { failures=Math.min(failures+1,4); }
       finally {
         clearTimeout(timeout);inFlight=false;
-        if(!disposed&&!document.hidden&&navigator.onLine)timer=setTimeout(()=>{void send(true);},Math.min(300_000,ACTIVITY_INTERVAL_MS*2**failures));
+        if(!disposed&&!document.hidden&&navigator.onLine)timer=setTimeout(()=>{void send(true);},Math.max(retryAt-Date.now(),Math.min(300_000,ACTIVITY_INTERVAL_MS*2**failures)));
       }
     }
     function visibility(){clearTimeout(timer);if(document.hidden){controller?.abort();void send(false);}else{void send(true);}}

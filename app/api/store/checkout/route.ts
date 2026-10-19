@@ -1,3 +1,6 @@
+import {boundedJson} from '@/lib/request-body';
+import { readAuthConfig } from '@/lib/auth-config';
+import { secureRoute } from '@/lib/secure-route';
 import { resolveAccountUser } from '@/lib/auth';
 import { getEntitlements } from '@/db/entitlements';
 import { createStripeCheckout } from '@/lib/stripe-lite';
@@ -15,18 +18,17 @@ function ownsProduct(key: StoreProductKey, entitlements: Awaited<ReturnType<type
   if (entitlements.originalRules) owned.add('original_rules');
   return STORE_PRODUCTS[key].grants.every(grant => owned.has(grant));
 }
-export async function POST(request: Request) {
-  if (request.headers.get('Origin') !== new URL(request.url).origin || request.headers.get('Sec-Fetch-Site') === 'cross-site') return json({ error: 'Open Parkes Rummy directly to continue.' }, 403);
+async function handlePost(request: Request) {
   const user = await resolveAccountUser(request);
   if (!user) return json({ error: 'Sign in to keep purchases across devices.' }, 401);
   let body: { product?: string } = {};
-  try { body = await request.json(); } catch { return json({ error: 'Choose a store item.' }, 400); }
+  try { body = await boundedJson(request,2048); } catch { return json({ error: 'Choose a store item.' }, 400); }
   const productKey = body.product as StoreProductKey;
   if (!productKey || !Object.hasOwn(STORE_PRODUCTS, productKey)) return json({ error: 'Choose a store item.' }, 400);
   const entitlements = await getEntitlements(user.id);
   if (ownsProduct(productKey, entitlements)) return json({ error: 'This account already owns this item.' }, 409);
   try {
-    const origin = new URL(request.url).origin;
+    const origin = readAuthConfig()?.origin || 'https://parkesrummy.com';
     const checkout = await createStripeCheckout({ userId: user.id, email: user.email, origin, productKey });
     return json({ url: checkout.url });
   } catch (error) {
@@ -35,3 +37,5 @@ export async function POST(request: Request) {
     return json({ error: 'Checkout did not open. Please try again.' }, 502);
   }
 }
+
+export const POST=secureRoute('checkout',handlePost);

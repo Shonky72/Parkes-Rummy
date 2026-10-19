@@ -1,4 +1,4 @@
-import type { GameAction, PublicRoom, RoomPreview, RoomSummaryResult } from './types';
+import type { GameAction, PublicRoom, InvitationPreview as RoomPreview, RoomSummaryResult } from './types';
 import { ROOM_PROTOCOL, ROOM_PROTOCOL_HEADER, ROOM_RELOAD_KEY, ROOM_UPDATE_MESSAGE, protocolReloadTarget } from './room-protocol';
 import { isRoomCode, normalizeRoomCode } from './room-code';
 import { getClientIdentity, isClientIdentityCurrent, subscribeClientIdentity } from './client-identity';
@@ -163,8 +163,10 @@ export function actionId() { return typeof crypto.randomUUID === 'function' ? cr
 export class RoomError extends Error {
   status: number;
   room?: PublicRoom;
+  retryAfter = 0;
   constructor(message: string, status: number, room?: PublicRoom) { super(message); this.name = 'RoomError'; this.status = status; this.room = room; }
 }
+let cooldownUntil = 0;
 let protocolReloadStarted = false;
 let incompatibleProtocol = false;
 function refreshForProtocol(serverProtocol: string) {
@@ -182,6 +184,7 @@ function refreshForProtocol(serverProtocol: string) {
   try { window.location.replace(target); } catch { /* Leave the refresh message visible if navigation is blocked. */ }
 }
 async function request<T>(path: string, options: { method?: string; body?: unknown; token?: string; signal?: AbortSignal } = {}): Promise<T> {
+  if(Date.now()<cooldownUntil){const e=new RoomError('Please wait before trying again.',429);e.retryAfter=Math.ceil((cooldownUntil-Date.now())/1000);throw e;}
   const identity = getClientIdentity();
   if (!identity.ready) throw new RoomError('Your account is changing. Please wait.', 401);
   const method = options.method ?? 'GET';
@@ -212,6 +215,7 @@ async function request<T>(path: string, options: { method?: string; body?: unkno
       throw new RoomError(ROOM_UPDATE_MESSAGE, 426);
     }
     if (serverProtocol === ROOM_PROTOCOL) incompatibleProtocol = false;
+    if(response.status===429)cooldownUntil=Date.now()+Math.min(300,Number(response.headers.get('Retry-After'))||60)*1000;
     if (!response.ok) throw new RoomError(data.error ?? 'The table did not respond. Please try again.', response.status, data.room);
     return data as T;
   } catch (error) {
@@ -225,10 +229,14 @@ async function request<T>(path: string, options: { method?: string; body?: unkno
     options.signal?.removeEventListener('abort', abort);
   }
 }
+export type JoinResult={room:PublicRoom;token:string;pending?:never}|{pending:{id:string;status:string;expiresAt:number};room?:never;token?:never};
 export const roomApi = {
   create: (name: string, quickPlay = false) => request<{ room: PublicRoom; token: string }>('/api/rooms', { method: 'POST', body: { name, ...(quickPlay ? { quickPlay: true } : {}) } }),
   preview: (code: string) => request<{ preview: RoomPreview }>(`/api/rooms/${encodeURIComponent(code)}/preview`),
-  join: (code: string, name: string, token?: string) => request<{ room: PublicRoom; token: string }>(`/api/rooms/${encodeURIComponent(code)}/join`, { method: 'POST', body: { name, ...(token ? { token } : {}) } }),
+  join: (code:string,name:string,token?:string,requestToken?:string)=>request<JoinResult>(`/api/rooms/${encodeURIComponent(code)}/join`,{method:'POST',body:{name,token,requestToken}}),
+  joinRequests: (code:string,token:string,own=false)=>request<{requests?:{id:string;name:string;expiresAt:number}[];request?:{id:string;status:string;expiresAt:number}|null}>(`/api/rooms/${encodeURIComponent(code)}/join-requests${own?'?own=true':''}`,{token}),
+  reviewJoin: (code:string,token:string,id:string,decision:'approve'|'decline')=>request(`/api/rooms/${encodeURIComponent(code)}/join-requests`,{method:'POST',token,body:{id,decision}}),
+  cancelJoin: (code:string,token:string)=>request(`/api/rooms/${encodeURIComponent(code)}/join-requests`,{method:'DELETE',token}),
   get: (code: string, token: string, signal?: AbortSignal) => request<{ room: PublicRoom }>(`/api/rooms/${encodeURIComponent(code)}`, { token, signal }),
   summaries: (seats: { code: string; token: string }[], signal?: AbortSignal) => request<{ summaries: RoomSummaryResult[] }>('/api/rooms/summaries', { method: 'POST', body: { seats }, signal }),
   accountGames: (signal?: AbortSignal) => request<{ games: (import('./types').RoomSummary & { token: string })[] }>('/api/account/games', { signal }),

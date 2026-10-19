@@ -19,6 +19,7 @@ function createAuth(config: GoogleAuthConfig) {
     trustedOrigins: [config.origin],
     rateLimit: { enabled: true, storage: 'database', window: 60, max: 100 },
     advanced: {
+      ipAddress: { ipAddressHeaders: ['x-nf-client-connection-ip'] },
       cookiePrefix: 'parkes-rummy', useSecureCookies: config.origin.startsWith('https:'),
       database: { generateId: () => crypto.randomUUID() },
     },
