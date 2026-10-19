@@ -27,11 +27,14 @@ type Batch = {
   expiresAt: number;
   stopListening: () => void;
   resolveWinning: (() => void) | null;
+  resolveLanding: (() => void) | null;
   retargetWinning: (() => void) | null;
 };
 
 /** Only returned for a new, visible round-winning play. */
 export interface WinningCardPlayback {
+  /** Resolves when the final public card reaches its actual destination. */
+  landed: Promise<void>;
   finished: Promise<void>;
   cancel: () => void;
 }
@@ -246,6 +249,9 @@ function cleanBatch(batch: Batch): void {
   batch.animations.clear();
   batch.ghosts.clear();
   batch.classes.clear();
+  const landed = batch.resolveLanding;
+  batch.resolveLanding = null;
+  landed?.();
   const resolve = batch.resolveWinning;
   batch.resolveWinning = null;
   resolve?.();
@@ -401,6 +407,9 @@ function showWinningAnnouncement(batch: Batch, winnerName: string): void {
   };
   position();
   batch.retargetWinning = position;
+  const notifyLanding = batch.resolveLanding;
+  batch.resolveLanding = null;
+  notifyLanding?.();
   // The real pile is offscreen. Announce the public win without creating a
   // fictitious card journey or holding the result for an invisible flight.
   const timer = setTimeout(() => { batch.timers.delete(timer); cleanBatch(batch); }, 2_800);
@@ -522,6 +531,9 @@ function startFlight(batch: Batch, flight: Flight, destination: Snapshot, elemen
         flash(batch, element, winning ? 'table-motion-winning-arrive' : 'table-motion-arrive', winning ? WINNING_CARD_TIMING.arrival : 390);
         if (winning) {
           landed = true;
+          const notifyLanding = batch.resolveLanding;
+          batch.resolveLanding = null;
+          notifyLanding?.();
           finale?.land();
           const timer = setTimeout(() => {
             batch.timers.delete(timer);
@@ -602,10 +614,11 @@ export function animateRoomTransition(previous: PublicRoom | null, next: PublicR
       animations: new Set(), ghosts: new Set(), classes: new Map(),
       expiresAt: performance.now() + (hasWinningPlay ? WINNING_CARD_TIMING.fallback : 1_700),
       stopListening: () => {},
-      resolveWinning: null, retargetWinning: null,
+      resolveWinning: null, resolveLanding: null, retargetWinning: null,
     };
     currentBatch = batch;
     const playback: WinningCardPlayback | null = hasWinningPlay ? {
+      landed: new Promise<void>(resolve => { batch.resolveLanding = resolve; }),
       finished: new Promise<void>(resolve => { batch.resolveWinning = resolve; }),
       cancel: () => cleanBatch(batch),
     } : null;

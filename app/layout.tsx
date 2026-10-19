@@ -22,6 +22,7 @@ import './install.css';
 import './home-information.css';
 import './mobile-usability.css';
 import './table-readability.css';
+import './end-hand.css';
 import { fontCssUrl } from '../lib/store-catalog';
 import InstallSupport from './components/InstallSupport';
 import HomeInformation from './components/HomeInformation';
