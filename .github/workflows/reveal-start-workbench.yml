@@ -1,0 +1,62 @@
+name: Reveal start workbench
+on:
+  push:
+    branches: [fix/reveal-at-winning-start]
+    paths: [.github/workflows/reveal-start-workbench.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/reveal-at-winning-start
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Change only animation signals and their timing tests
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          def edit(path, old, new):
+              p=Path(path);s=p.read_text()
+              assert s.count(old)==1, (path,old,s.count(old))
+              p.write_text(s.replace(old,new))
+          motion='lib/table-motion.ts'
+          edit(motion,'  resolveWinning: (() => void) | null;\n  resolveLanding:', '  resolveWinning: (() => void) | null;\n  resolveStarted: (() => void) | null;\n  resolveLanding:')
+          edit(motion,'export interface WinningCardPlayback {\n  /** Resolves when the final public card reaches its actual destination. */', 'export interface WinningCardPlayback {\n  /** Resolves as the winning-card sequence begins, before flight or landing completes. */\n  started: Promise<void>;\n  /** Resolves when the final public card reaches its actual destination. */')
+          edit(motion,'  const landed = batch.resolveLanding;\n  batch.resolveLanding = null;', '  const started = batch.resolveStarted;\n  batch.resolveStarted = null;\n  started?.();\n  const landed = batch.resolveLanding;\n  batch.resolveLanding = null;')
+          edit(motion,'  batch.retargetWinning = position;\n  const notifyLanding = batch.resolveLanding;', '  batch.retargetWinning = position;\n  const notifyStarted = batch.resolveStarted;\n  batch.resolveStarted = null;\n  notifyStarted?.();\n  const notifyLanding = batch.resolveLanding;')
+          edit(motion,'    batch.animations.add(animation);\n    let landed = false;', '    batch.animations.add(animation);\n    if (winning) {\n      const notifyStarted = batch.resolveStarted;\n      batch.resolveStarted = null;\n      notifyStarted?.();\n    }\n    let landed = false;')
+          edit(motion,'      resolveWinning: null, resolveLanding: null, retargetWinning: null,', '      resolveWinning: null, resolveStarted: null, resolveLanding: null, retargetWinning: null,')
+          edit(motion,'    const playback: WinningCardPlayback | null = hasWinningPlay ? {\n      landed:', '    const playback: WinningCardPlayback | null = hasWinningPlay ? {\n      started: new Promise<void>(resolve => { batch.resolveStarted = resolve; }),\n      landed:')
+          reveal='lib/hand-reveal.ts'
+          edit(reveal,"/** Begin the flip at the actual card landing, not after the winner's glow fades.", '/** Begin the flip with the winning-card sequence, without waiting for landing.')
+          edit(reveal,'  const reveal = playback.landed.then(() => {', '  const reveal = playback.started.then(() => {')
+          edit(reveal,'  return {\n    landed: playback.landed,', '  return {\n    started: playback.started,\n    landed: playback.landed,')
+          tests='tests/hand-reveal.test.ts'
+          edit(tests,'  let land!:()=>void,finish!:()=>void;','  let start!:()=>void,land!:()=>void,finish!:()=>void;')
+          edit(tests,'  const playback:WinningCardPlayback={landed:new Promise<void>(r=>land=r),finished:new Promise<void>(r=>finish=r),cancel(){land();finish();}};', '  const playback:WinningCardPlayback={started:new Promise<void>(r=>start=r),landed:new Promise<void>(r=>land=r),finished:new Promise<void>(r=>finish=r),cancel(){start();land();finish();}};')
+          edit(tests,'  return {playback,land,finish};','  return {playback,start,land,finish};')
+          edit(tests,"test('flip starts on landing, before the winner-glow playback finishes'", "test('flip starts with the winning sequence, before landing or the winner-glow finishes'")
+          edit(tests,'  source.land();await Promise.resolve();assert.equal(reveals,1);assert.equal(done,false);', '  source.start();await Promise.resolve();assert.equal(reveals,1);assert.equal(done,false);\n  assert.equal(playback.started,source.playback.started);\n  assert.equal(playback.landed,source.playback.landed);')
+          edit(tests,'  source.finish();await playback.finished;assert.equal(done,true);assert.equal(reveals,1);', '  source.land();await Promise.resolve();assert.equal(reveals,1);assert.equal(done,false);\n  source.finish();await playback.finished;assert.equal(done,true);assert.equal(reveals,1);')
+          edit(tests,'  source.land();source.finish();await Promise.resolve();await Promise.resolve();assert.equal(done,false);', '  source.start();source.land();source.finish();await Promise.resolve();await Promise.resolve();assert.equal(done,false);')
+          edit(tests,"test('leaving before landing cancels the reveal; leaving during a flip resolves promptly'", "test('leaving before animation start cancels the reveal; leaving during a flip resolves promptly'")
+          edit(tests,'  b.land();await Promise.resolve();assert.equal(count,1);during.cancel();await during.finished;assert.equal(count,1);', '  b.start();await Promise.resolve();assert.equal(count,1);during.cancel();await during.finished;assert.equal(count,1);\n  const c=deferredPlayback();const sameFrame=coordinateHandReveal(c.playback,()=>{count++;},5000);\n  c.start();sameFrame.cancel();await sameFrame.finished;assert.equal(count,1);')
+          ui='tests/reveal-session-ui.mjs'
+          edit(ui,"  assert.equal(await h.page.locator('.opponent .end-hand-card').count(),0,'No reveal during the final card flight');\n  await h.page.locator('.opponent .end-hand-flipping').waitFor({timeout:10000});", "  await h.page.locator('.opponent .end-hand-flipping').waitFor({timeout:1500});\n  assert.equal(await h.page.locator('.table-motion-winning-flight').count(),1,'Reveal begins while the winning-card sequence is still flying');\n  assert.equal(await h.page.locator('.table-motion-winning-arrive').count(),0,'Reveal must not wait for landing');")
+          edit(ui,'flipAtLanding:true','flipAtAnimationStart:true')
+          PY
+          git diff --check
+          git diff --stat
+          git add lib/table-motion.ts lib/hand-reveal.ts tests/hand-reveal.test.ts tests/reveal-session-ui.mjs
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Begin opponent card flips when the winning animation starts; preserve result timing'
+          git push origin HEAD:fix/reveal-at-winning-start
+      - run: npm ci
+      - run: npm run typecheck
+      - run: node --import tsx --test tests/hand-reveal.test.ts
