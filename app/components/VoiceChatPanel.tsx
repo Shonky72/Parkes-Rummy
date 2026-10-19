@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Headphones, Mic, MicOff, PhoneCall, PhoneOff, Volume2, VolumeX } from 'lucide-react';
 import { VoiceLifecycle } from '../../lib/voice-lifecycle';
 import type { AccountSnapshot } from '../../lib/account-client';
@@ -9,7 +10,10 @@ interface Peer { id:string; name:string }
 interface Signal { id:number; from:string; kind:SignalKind; payload:string }
 interface VoiceResponse { playerId?:string; peers?:Peer[]; blockedPlayerIds?:string[]; signals?:Signal[]; latestSignalId?:number; iceServers?:RTCIceServer[]; error?:string }
 
-export default function VoiceChatPanel({ account, roomCode }: { account: AccountSnapshot; roomCode?: string }) {
+export default function VoiceChatPanel({ account, roomCode, panelHost, panelOpen = true, onConnectionChange }: {
+  account: AccountSnapshot; roomCode?: string; panelHost?: HTMLElement | null; panelOpen?: boolean;
+  onConnectionChange?: (connected: boolean) => void;
+}) {
   const [status,setStatus]=useState<'off'|'joining'|'connected'>('off');
   const [peers,setPeers]=useState<Peer[]>([]),[blocked,setBlocked]=useState<string[]>([]),[muted,setMuted]=useState(false),[silenced,setSilenced]=useState(false),[error,setError]=useState('');
   const localStream=useRef<MediaStream|null>(null), selfId=useRef(''), since=useRef(0), ice=useRef<RTCIceServer[]>([]), timer=useRef<number|null>(null), joined=useRef(false);
@@ -86,11 +90,20 @@ export default function VoiceChatPanel({ account, roomCode }: { account: Account
   const setSilence=(value:boolean)=>{setSilenced(value);silencedRef.current=value;for(const audio of audios.current.values())audio.muted=value;for(const track of localStream.current?.getAudioTracks()||[])track.enabled=!(muted||value);};
   const togglePeer=async(id:string)=>{const shouldBlock=!blocked.includes(id);try{const data=await api({action:'block',playerId:id,blocked:shouldBlock});if(!current())return;const next=data.blockedPlayerIds||[];setBlocked(next);blockedRef.current=next;if(next.includes(id))closePeer(id);else{const peer=peers.find(p=>p.id===id);if(peer&&selfId.current<id)await ensurePeer(peer,true);}}catch(e){setError(e instanceof Error?e.message:'Mute did not change.');}};
   useEffect(()=>{const away=()=>{void leave();};const visibility=()=>{if(document.hidden)away();};document.addEventListener('visibilitychange',visibility);window.addEventListener('pagehide',away);return()=>{document.removeEventListener('visibilitychange',visibility);window.removeEventListener('pagehide',away);void leave();};},[roomCode,account.user?.id,account.status,account.operation,account.entitlements.voiceChat]);
+  // Closing a menu is not leaving the table. Cancel unfinished permission/setup,
+  // but keep an explicitly established call alive while the player uses cards.
+  useEffect(()=>{if(!panelOpen&&!joined.current)void leave();},[panelOpen]);
+  useEffect(()=>{onConnectionChange?.(status==='connected');},[status,onConnectionChange]);
+  const renderPanel=()=>{
   if(!roomCode)return <section className="voice-panel voice-disabled"><Headphones size={20}/><div><strong>Voice Chat</strong><p>Join a table to use voice.</p></div></section>;
   if(!account.user)return <section className="voice-panel voice-disabled"><Headphones size={20}/><div><strong>Voice Chat</strong><p>Sign in to use purchased voice access across devices.</p></div></section>;
   if(!account.entitlements.voiceChat)return <section className="voice-panel voice-disabled"><Headphones size={20}/><div><strong>Voice Chat</strong><p>Available from the Store for a one-off A$2.99.</p><a className="text-link" href="/store">Open Store</a></div></section>;
-  return <section className="voice-panel"><header><div><Headphones size={20}/><span><strong>Table voice</strong><small>{status==='connected'?'Connected':'Off until you join'}</small></span></div>{status==='connected'?<button className="button outline small" onClick={()=>void leave()}><PhoneOff size={16}/>Leave</button>:<button className="button gold small" disabled={status==='joining'} onClick={()=>void join()}><PhoneCall size={16}/>{status==='joining'?'Joining…':'Join voice'}</button>}</header>
-    {status==='connected'&&<><div className="voice-main-controls"><button className="button outline small" aria-pressed={muted} onClick={()=>setMic(!muted)}>{muted?<MicOff size={16}/>:<Mic size={16}/>} {muted?'Unmute mic':'Mute mic'}</button><button className="button outline small" aria-pressed={silenced} onClick={()=>setSilence(!silenced)}>{silenced?<Volume2 size={16}/>:<VolumeX size={16}/>} {silenced?'Restore everyone':'Silence everyone'}</button></div><div className="voice-peers">{peers.length===0?<p>Waiting for another voice-enabled player.</p>:peers.map(peer=><div key={peer.id}><span>{peer.name}</span><button className="button quiet small" aria-pressed={blocked.includes(peer.id)} onClick={()=>void togglePeer(peer.id)}>{blocked.includes(peer.id)?'Restore voice':'Mute both ways'}</button></div>)}</div><p className="voice-note">Individual mute works both ways. Backgrounding the game stops your microphone and leaves voice.</p></>}
+  return <section className="voice-panel"><header><div><Headphones size={20}/><span><strong>Table voice</strong><small>{status==='connected'?'Connected':status==='joining'?'Connecting… keep this panel open':'Off until you join'}</small></span></div>{status==='connected'?<button className="button outline small" onClick={()=>void leave()}><PhoneOff size={16}/>Leave</button>:<button className="button gold small" disabled={status==='joining'} onClick={()=>void join()}><PhoneCall size={16}/>{status==='joining'?'Joining…':'Join voice'}</button>}</header>
+    {status==='connected'&&<><div className="voice-main-controls"><button className="button outline small" aria-pressed={muted} onClick={()=>setMic(!muted)}>{muted?<MicOff size={16}/>:<Mic size={16}/>} {muted?'Unmute mic':'Mute mic'}</button><button className="button outline small" aria-pressed={silenced} onClick={()=>setSilence(!silenced)}>{silenced?<Volume2 size={16}/>:<VolumeX size={16}/>} {silenced?'Restore everyone':'Silence everyone'}</button></div><div className="voice-peers">{peers.length===0?<p>Waiting for another voice-enabled player.</p>:peers.map(peer=><div key={peer.id}><span>{peer.name}</span><button className="button quiet small" aria-pressed={blocked.includes(peer.id)} onClick={()=>void togglePeer(peer.id)}>{blocked.includes(peer.id)?'Restore voice':'Mute both ways'}</button></div>)}</div><p className="voice-note">Voice stays connected when you close Settings. Individual mute works both ways. Leaving the table or backgrounding the game stops your microphone.</p></>}
     {error&&<p className="voice-error" role="alert">{error}</p>}
   </section>;
+  };
+  if (!panelOpen) return null;
+  const panel = renderPanel();
+  return panelHost === undefined ? panel : panelHost ? createPortal(panel, panelHost) : null;
 }

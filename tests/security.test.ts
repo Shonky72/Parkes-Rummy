@@ -116,3 +116,34 @@ test('advertising requires all eligibility conditions; CSP blocks framing and ha
  for(const changed of [{enabled:false},{consent:null},{consent:'declined'},{ready:false},{adFree:true}])assert.equal(advertisingAllowed({...allowed,...changed}),false);
  const policy=contentSecurityPolicy('test-nonce');assert.match(policy,/frame-ancestors 'none'/);assert.match(policy,/script-src[^;]*'nonce-test-nonce'/);assert.ok(!/script-src[^;]*'unsafe-inline'/.test(policy));
 });
+
+test('approved guest receives the live hand in the approval response when the host starts immediately',async()=>{
+ const host=await create(),candidate=await submit(host.room.code);
+ assert.equal((await decide(host,candidate.data.pending.id)).status,200);
+ const admitted=(await repository.load(host.room.code))!;
+ const started=applyAction(admitted.room,admitted.room.hostId,{type:'start'});
+ await repository.save(started,admitted.version);
+ const response=await api.joinRequestsRequest(req('/requests?own=true',undefined,candidate.token),host.room.code);
+ assert.equal(response.status,200);const own=await response.json();
+ assert.equal(own.request.status,'approved');assert.equal(own.room.status,'playing');assert.equal(own.room.hand.length,10);
+ assert.equal(own.room.players.find((p:{id:string})=>p.id===own.room.youId).name,'Newcomer');
+ assert.ok(!JSON.stringify(own).includes('tokenHash'));
+ const outsider=await api.joinRequestsRequest(req('/requests?own=true',undefined,proof()),host.room.code);
+ const blocked=await outsider.json();assert.equal(blocked.room,undefined);assert.equal(blocked.request,null);
+});
+
+test('approved durable seats resume after receipt expiry; expired unapproved and removed applicants see no cards',async()=>{
+ const host=await create(),candidate=await submit(host.room.code);
+ assert.equal((await decide(host,candidate.data.pending.id)).status,200);
+ await db.query('UPDATE join_requests SET expires_at=$1 WHERE id=$2',[Date.now()-1,candidate.data.pending.id]);
+ const approved=await (await api.joinRequestsRequest(req('/requests?own=true',undefined,candidate.token),host.room.code)).json();
+ assert.equal(approved.request.status,'approved');assert.equal(approved.room.status,'lobby');
+ const record=(await repository.load(host.room.code))!,other=record.room.players.find(p=>p.id!==record.room.hostId)!;
+ await repository.save(applyAction(record.room,record.room.hostId,{type:'removePlayer',playerId:other.id}),record.version);
+ const removed=await (await api.joinRequestsRequest(req('/requests?own=true',undefined,candidate.token),host.room.code)).json();
+ assert.equal(removed.room,undefined);assert.equal(removed.request,null);
+ const waiting=await submit(host.room.code,'Waiting');
+ await db.query('UPDATE join_requests SET expires_at=$1 WHERE id=$2',[Date.now()-1,waiting.data.pending.id]);
+ const expired=await (await api.joinRequestsRequest(req('/requests?own=true',undefined,waiting.token),host.room.code)).json();
+ assert.equal(expired.room,undefined);assert.equal(expired.request,null);
+});

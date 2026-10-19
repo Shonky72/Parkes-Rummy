@@ -1,0 +1,70 @@
+/* Completed-hand presentation only. Live hands remain private and unchanged. */
+.end-hand-cards{display:flex;align-items:center;flex-wrap:wrap;gap:5px;min-width:0;max-width:100%}
+.end-hand-card{display:block;position:relative;width:42px;height:60px;flex:0 0 42px;perspective:500px}
+.end-hand-card-inner{display:block;position:relative;width:100%;height:100%;transform-style:preserve-3d}
+.end-hand-card-front,.end-hand-card-back{display:block;position:absolute;inset:0;width:100%;height:100%;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.end-hand-card-front>.card-face{width:100%;height:100%;border-radius:5px;display:block}
+.end-hand-card-front .card-corner{left:8%;top:4%}
+.end-hand-card-front .card-corner b{font-size:17px;letter-spacing:0}
+.end-hand-card-front .card-corner>span{font-size:12px}
+.end-hand-card-front .card-centre{font-size:30px}
+.end-hand-card-front .wild-badge{font-size:7px;height:auto;line-height:1.2;bottom:2px;padding:1px 2px}
+.end-hand-card-back{transform:rotateY(180deg);border-width:2px;padding:2px;border-radius:5px}
+.end-hand-card-back>span{width:100%;height:100%;display:block;background-size:8px 8px}
+.end-hand-flipping .end-hand-card-inner{animation:completed-hand-flip 420ms ease-in-out var(--flip-delay,0ms) both}
+@keyframes completed-hand-flip{from{transform:rotateY(180deg)}to{transform:rotateY(0)}}
+.end-hand-empty{font-size:12px;color:#ead087;line-height:1.4}
+/* Share the same fixed-height opponent rail. Shrink and overlap only within the
+   space that previously held the card backs; do not move neighbouring panels. */
+.card-backs{--end-card-h:61px;--end-card-w:43px;--end-rail-gap:4px}
+.eight-players .card-backs{--end-card-h:35px;--end-card-w:25px;--end-rail-gap:3px}
+.card-backs>.end-hand-compact{flex:1;flex-wrap:nowrap;gap:var(--end-rail-gap);width:100%;min-height:0;height:var(--end-card-h)}
+.card-backs .end-hand-compact>.end-hand-card{flex:0 1 var(--end-card-w);min-width:0;max-width:var(--end-card-w);height:var(--end-card-h)}
+.card-backs .end-hand-compact .card-corner b{font-size:clamp(10px,calc(var(--end-card-w) * .38),17px)}
+.card-backs .end-hand-compact .card-corner>span{font-size:clamp(7px,calc(var(--end-card-w) * .28),12px)}
+.card-backs .end-hand-compact .card-centre{font-size:clamp(13px,calc(var(--end-card-w) * .64),30px)}
+.card-backs .end-hand-compact .wild-badge{font-size:clamp(4px,calc(var(--end-card-w) * .16),7px);padding:1px;bottom:1px}
+@media(min-width:1600px){.card-backs{--end-card-h:66px;--end-card-w:48px}}
+@media(max-width:1320px){.card-backs{--end-card-h:52px;--end-card-w:36px;--end-rail-gap:3px}}
+@media(max-width:1100px){.card-backs{--end-card-h:46px;--end-card-w:30px}}
+@media(max-width:850px){.card-backs{--end-card-h:44px;--end-card-w:30px}.eight-players .card-backs{--end-card-h:33px;--end-card-w:20px}}
+@media(max-width:600px){.card-backs{--end-card-h:37px;--end-card-w:23px;--end-rail-gap:2px}.eight-players .card-backs{--end-card-h:29px;--end-card-w:20px;--end-rail-gap:2px}}
+@media(max-width:390px){.card-backs{--end-card-h:32px;--end-card-w:20px}}
+/* Four explicit columns keep cards between the player's identity and scores. */
+.modal.result-modal{max-width:920px}
+.result-table-head,.result-row{grid-template-columns:minmax(125px,.8fr) minmax(130px,1.8fr) 80px 58px;gap:12px}
+.result-table-head>span.result-cards-label{text-align:left}
+.result-row>.result-hand{min-width:0;max-width:100%;display:block;grid-column:2;grid-row:1}
+.result-row>div:first-child{min-width:0;grid-column:1;grid-row:1}
+.result-row>span{grid-column:3;grid-row:1}
+.result-row>b{grid-column:4;grid-row:1}
+.result-row>div:first-child strong{overflow-wrap:anywhere}
+.result-row .result-rule-outcome{grid-column:1/-1;grid-row:2}
+/* All four desktop labels have their own content-sized space. Mobile retains
+   the existing two-by-two selector instead of squeezing the long fourth name. */
+@media(min-width:851px){
+  .parkes-app .segmented.game-tabs{display:grid;grid-template-columns:repeat(3,minmax(80px,1fr)) minmax(130px,1.35fr);width:min(100%,530px);max-width:100%;min-width:0;flex:0 1 530px}
+  .parkes-app .segmented.game-tabs>button{min-width:0;padding:9px 12px;font-size:15px;white-space:normal;overflow-wrap:normal;line-height:1.2}
+  .rules-modal .segmented.game-tabs{width:100%;max-width:none}
+}
+.icon-button[aria-label="Voice chat"][aria-pressed="true"]{position:relative;color:#f3d17e}
+.icon-button[aria-label="Voice chat"][aria-pressed="true"]::after{content:"";position:absolute;right:2px;top:2px;width:7px;height:7px;border-radius:50%;background:#7bdeb1;box-shadow:0 0 0 2px #12392a}
+.voice-panel-slot:empty{display:none}
+@media(max-width:850px){
+  .result-table-head,.result-row{grid-template-columns:minmax(0,1fr) 66px 46px;gap:9px}
+  .result-table-head>.result-cards-label{display:none}
+  .result-row>span{grid-column:2}
+  .result-row>b{grid-column:3}
+  .result-row>.result-hand{grid-column:1/-1;grid-row:2;margin:3px 0}
+  .result-row>.result-rule-outcome{grid-row:3}
+  .result-row>.result-hand .end-hand-cards{gap:5px}
+}
+@media(max-width:420px){
+  .result-row>div:first-child{gap:7px}
+  .result-row>div:first-child strong{font-size:13px}
+  .result-table{padding:6px 10px}
+  .result-hand .end-hand-card{width:36px;height:53px;flex-basis:36px}
+  .result-hand .end-hand-card .card-corner b{font-size:15px}
+  .result-hand .end-hand-card .card-centre{font-size:25px}
+}
+@media(prefers-reduced-motion:reduce){.end-hand-flipping .end-hand-card-inner{animation:none;transform:none}}

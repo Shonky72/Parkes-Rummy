@@ -234,7 +234,7 @@ export const roomApi = {
   create: (name: string, quickPlay = false) => request<{ room: PublicRoom; token: string }>('/api/rooms', { method: 'POST', body: { name, ...(quickPlay ? { quickPlay: true } : {}) } }),
   preview: (code: string) => request<{ preview: RoomPreview }>(`/api/rooms/${encodeURIComponent(code)}/preview`),
   join: (code:string,name:string,token?:string,requestToken?:string)=>request<JoinResult>(`/api/rooms/${encodeURIComponent(code)}/join`,{method:'POST',body:{name,token,requestToken}}),
-  joinRequests: (code:string,token:string,own=false)=>request<{requests?:{id:string;name:string;expiresAt:number}[];request?:{id:string;status:string;expiresAt:number}|null}>(`/api/rooms/${encodeURIComponent(code)}/join-requests${own?'?own=true':''}`,{token}),
+  joinRequests: (code:string,token:string,own=false)=>request<{requests?:{id:string;name:string;expiresAt:number}[];request?:{id:string;status:string;expiresAt:number}|null;room?:PublicRoom}>(`/api/rooms/${encodeURIComponent(code)}/join-requests${own?'?own=true':''}`,{token}),
   reviewJoin: (code:string,token:string,id:string,decision:'approve'|'decline')=>request(`/api/rooms/${encodeURIComponent(code)}/join-requests`,{method:'POST',token,body:{id,decision}}),
   cancelJoin: (code:string,token:string)=>request(`/api/rooms/${encodeURIComponent(code)}/join-requests`,{method:'DELETE',token}),
   get: (code: string, token: string, signal?: AbortSignal) => request<{ room: PublicRoom }>(`/api/rooms/${encodeURIComponent(code)}`, { token, signal }),

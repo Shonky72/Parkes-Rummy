@@ -6,7 +6,7 @@ import type { PublicRoom } from '../../lib/types';
 export interface PendingJoin { code:string; name:string; proof:string; expiresAt:number; identity:string; expectedToken?:string|null }
 const KEY='parkes-rummy:pending-approval';
 export function savePendingJoin(value:PendingJoin|null){try{if(value)sessionStorage.setItem(KEY,JSON.stringify(value));else sessionStorage.removeItem(KEY);}catch{/* Keep in memory when storage is unavailable. */}}
-export function readPendingJoin(identity:string):PendingJoin|null{try{const p=JSON.parse(sessionStorage.getItem(KEY)||'null');return p&&p.identity===identity&&typeof p.code==='string'&&typeof p.name==='string'&&/^[a-f0-9]{64}$/.test(p.proof)&&p.expiresAt>Date.now()?p:null;}catch{return null;}}
+export function readPendingJoin(identity:string):PendingJoin|null{try{const p=JSON.parse(sessionStorage.getItem(KEY)||'null');return p&&p.identity===identity&&typeof p.code==='string'&&typeof p.name==='string'&&/^[a-f0-9]{64}$/.test(p.proof)&&Number.isFinite(p.expiresAt)?p:null;}catch{return null;}}
 export function newJoinProof(){return Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');}
 
 export function JoinWaiting({pending,onReady,onCancel}:{pending:PendingJoin;onReady:(room:PublicRoom,token:string)=>void;onCancel:()=>void}){
@@ -14,26 +14,30 @@ export function JoinWaiting({pending,onReady,onCancel}:{pending:PendingJoin;onRe
   const callbacks=useRef({onReady,onCancel});callbacks.current={onReady,onCancel};
   const token=pending.identity==='guest'?pending.proof:pending.identity;
   useEffect(()=>{
-    let disposed=false,timer:ReturnType<typeof setTimeout>;
+    let disposed=false,inFlight=false,finished=false,timer:ReturnType<typeof setTimeout>|undefined;
     async function poll(){
-      if(disposed)return;
-      if(document.hidden){timer=setTimeout(poll,3000);return;}
+      if(disposed||finished||inFlight)return;
+      if(document.hidden)return;
+      inFlight=true;
       try{
-        if(Date.now()>=pending.expiresAt){setMessage('Your request expired. Request a seat again when you are ready.');setDone(true);return;}
+        // The server checks the seat before receipt expiry. The host may
+        // already have approved and started while this tab was backgrounded.
         const result=await roomApi.joinRequests(pending.code,token,true);
         if(disposed)return;
         if(result.request?.status==='approved'){
-          const seat=await roomApi.get(pending.code,token);
-          if(!disposed){savePendingJoin(null);callbacks.current.onReady(seat.room,token);}return;
+          const room=result.room??(await roomApi.get(pending.code,token)).room;
+          if(!disposed){finished=true;callbacks.current.onReady(room,token);}return;
         }
-        if(!result.request||['declined','cancelled'].includes(result.request.status)){
-          setMessage(result.request?.status==='declined'?'The host declined your request.':'This request is no longer available.');setDone(true);return;
+        if(!result.request||['declined','cancelled'].includes(result.request.status)||Date.now()>=pending.expiresAt){
+          setMessage(result.request?.status==='declined'?'The host declined your request.':Date.now()>=pending.expiresAt?'Your request expired. Request a seat again when you are ready.':'This request is no longer available.');setDone(true);finished=true;return;
         }
         setMessage('Waiting for host approval');
-      }catch(e){if(disposed)return;if(e instanceof RoomError&&[401,403,404,410].includes(e.status)){setMessage(e.message);setDone(true);return;}setMessage(e instanceof Error?e.message:'Reconnecting to the host…');}
-      if(!disposed)timer=setTimeout(poll,3000);
+      }catch(e){if(disposed)return;if(e instanceof RoomError&&[401,403,404,410].includes(e.status)){setMessage(e.message);setDone(true);finished=true;return;}setMessage(e instanceof Error?e.message:'Reconnecting to the host…');}
+      finally{inFlight=false;if(!disposed&&!finished&&!document.hidden)timer=setTimeout(poll,3000);}
     }
-    void poll();return()=>{disposed=true;clearTimeout(timer);};
+    const resume=()=>{clearTimeout(timer);if(!document.hidden)void poll();};
+    document.addEventListener('visibilitychange',resume);window.addEventListener('online',resume);
+    void poll();return()=>{disposed=true;clearTimeout(timer);document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);};
   },[pending.code,pending.expiresAt,token]);
   async function cancel(){
     try{if(!done)await roomApi.cancelJoin(pending.code,token);savePendingJoin(null);callbacks.current.onCancel();}

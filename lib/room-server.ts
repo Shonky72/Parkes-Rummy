@@ -330,7 +330,16 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
         const actor=identity.user?accountMarker(identity.user.id):identity.token&&/^[a-f0-9]{64}$/.test(identity.token)?await hashToken(identity.token):null;
         if(!actor)throw new ApiError('Your request is unavailable.',401);
         const entry=await joins.own(code,record.room.createdAt,actor);
-        return reply({request:entry&&!(entry.status==='pending'&&record.room.status!=='lobby')?{id:entry.id,status:entry.status,expiresAt:Number(entry.expires_at)}:null});
+        // Approval creates a durable seat. Starting a hand (or an expired
+        // approval receipt) must not strand that already-authorized player.
+        // Reuse the same seat authorization as GET /rooms/:code, never trust
+        // the receipt alone or disclose cards to a pending/removed applicant.
+        let seated: PlayerState | undefined;
+        try { seated=await authorizedPlayer(record,identity); }
+        catch (error) { if (!(error instanceof ApiError) || ![401,403].includes(error.status) || error.code) throw error; }
+        if (seated) return reply({request:{id:entry?.id??seated.id,status:'approved',expiresAt:Number(entry?.expires_at??Date.now())},room:publicRoom(record.room,seated.id)});
+        // An old approval is not permission to re-enter a removed seat.
+        return reply({request:entry&&entry.status!=='approved'&&!(entry.status==='pending'&&record.room.status!=='lobby')?{id:entry.id,status:entry.status,expiresAt:Number(entry.expires_at)}:null});
       }
       const host=await authorizedPlayer(record,identity);
       if(host.id!==record.room.hostId)throw new ApiError('Only the host reviews requests.',403);
