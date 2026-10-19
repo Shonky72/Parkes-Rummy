@@ -33,7 +33,7 @@
 /* Four explicit columns keep cards between the player's identity and scores. */
 .modal.result-modal{max-width:920px}
 .result-table-head,.result-row{grid-template-columns:minmax(125px,.8fr) minmax(130px,1.8fr) 80px 58px;gap:12px}
-.result-table-head>.result-cards-label{text-align:left}
+.result-table-head>span.result-cards-label{text-align:left}
 .result-row>.result-hand{min-width:0;max-width:100%;display:block;grid-column:2;grid-row:1}
 .result-row>div:first-child{min-width:0;grid-column:1;grid-row:1}
 .result-row>span{grid-column:3;grid-row:1}
@@ -58,7 +58,6 @@
   .result-row>.result-hand{grid-column:1/-1;grid-row:2;margin:3px 0}
   .result-row>.result-rule-outcome{grid-row:3}
   .result-row>.result-hand .end-hand-cards{gap:5px}
-
 }
 @media(max-width:420px){
   .result-row>div:first-child{gap:7px}
