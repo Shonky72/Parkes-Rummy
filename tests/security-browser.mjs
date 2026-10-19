@@ -10,6 +10,13 @@ import {ROOM_PROTOCOL,ROOM_PROTOCOL_HEADER} from '../lib/room-protocol.ts';
 const port=await new Promise(resolve=>{const s=createServer();s.listen(0,'127.0.0.1',()=>{const p=s.address().port;s.close(()=>resolve(p));});});
 const env={...process.env,PARKES_SECURITY_BUILD:'1',NEXT_PUBLIC_ADS_ENABLED:'true',NEXT_PUBLIC_ADSENSE_CLIENT:'ca-pub-fixture',NEXT_PUBLIC_ADSENSE_SLOT_HOME:'fixture',NEXT_TELEMETRY_DISABLED:'1'};
 async function command(args){await new Promise((resolve,reject)=>{const p=spawn(process.execPath,args,{env,stdio:'inherit',windowsHide:true});p.on('exit',code=>code===0?resolve():reject(new Error(`Build exited ${code}`)));p.on('error',reject);});}
+async function fillInvitationName(page,name){
+ const field=page.locator('#guest-name');await field.waitFor({state:'visible'});
+ // The initial saved-name preference is applied on an animation frame.
+ // Wait for that first paint instead of racing it with synthetic typing.
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ await field.fill(name);assert.equal(await field.inputValue(),name);
+}
 const generatedInputs=await Promise.all(['tsconfig.json','next-env.d.ts'].map(async path=>[path,await readFile(path)]));
 try{
  // Other browser suites remove their CI-only page after building .next.
@@ -71,7 +78,7 @@ try{
  const cspErrors=[];for(const page of [host,guest])page.on('console',m=>{if(m.type()==='error'&&m.text().includes('Content Security Policy'))cspErrors.push(m.text());});
  const response=await guest.goto(`${base}/join/ABCD`);
  assert.match(response.headers()['content-security-policy'],/nonce-/);assert.equal(response.headers()['x-frame-options'],'DENY');
- await guest.locator('#guest-name').fill('Fixture guest');await guest.getByRole('button',{name:/Join game/}).click();
+ await fillInvitationName(guest,'Fixture guest');await guest.getByRole('button',{name:/Join game/}).click();
  await guest.getByRole('heading',{name:'Waiting for host approval'}).waitFor();
  assert.deepEqual(await guest.evaluate(()=>JSON.parse(localStorage.getItem('parkes-rummy:seats')||'{}')),{});
  await host.goto(`${base}/join/ABCD`);await host.getByRole('button',{name:'Approve',exact:true}).click();
@@ -80,7 +87,7 @@ try{
 
  // Repeat with cancellation: pending applicants never become seated players.
  const cancelContext=await browser.newContext();await setup(cancelContext);const cancelPage=await cancelContext.newPage();
- approved=false;submitted=false;await cancelPage.goto(`${base}/join/ABCD`);await cancelPage.locator('#guest-name').fill('Cancel guest');await cancelPage.getByRole('button',{name:/Join game/}).click();await cancelPage.getByRole('button',{name:'Cancel request'}).click();assert.equal(submitted,false);assert.deepEqual(await cancelPage.evaluate(()=>JSON.parse(localStorage.getItem('parkes-rummy:seats')||'{}')),{});
+ approved=false;submitted=false;await cancelPage.goto(`${base}/join/ABCD`);await fillInvitationName(cancelPage,'Cancel guest');await cancelPage.getByRole('button',{name:/Join game/}).click();await cancelPage.getByRole('button',{name:'Cancel request'}).click();assert.equal(submitted,false);assert.deepEqual(await cancelPage.evaluate(()=>JSON.parse(localStorage.getItem('parkes-rummy:seats')||'{}')),{});
  console.log('PASS: pending cancellation leaves no saved seat');
 
  // Fake media devices expose only a stop counter; no real microphone is used.

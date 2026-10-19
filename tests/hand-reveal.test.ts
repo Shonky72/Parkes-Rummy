@@ -16,9 +16,9 @@ function finishedFixture(quick=false) {
   return {before,final};
 }
 function deferredPlayback(){
-  let land!:()=>void,finish!:()=>void;
-  const playback:WinningCardPlayback={landed:new Promise<void>(r=>land=r),finished:new Promise<void>(r=>finish=r),cancel(){land();finish();}};
-  return {playback,land,finish};
+  let start!:()=>void,land!:()=>void,finish!:()=>void;
+  const playback:WinningCardPlayback={started:new Promise<void>(r=>start=r),landed:new Promise<void>(r=>land=r),finished:new Promise<void>(r=>finish=r),cancel(){start();land();finish();}};
+  return {playback,start,land,finish};
 }
 test('only current completed hands reveal opponents; no live or stale-round cards',()=>{
   const {before,final}=finishedFixture();const view=publicRoom(final,'a');
@@ -37,26 +37,31 @@ test('quick and full-game final score cards retain their authoritative values',(
   const {final}=finishedFixture(true);assert.equal(final.status,'finished');
   for(const viewer of final.players){const view=publicRoom(final,viewer.id);for(const row of final.result!.scores)assert.deepEqual(completedHandCards(view,row.playerId),row.cards);}
 });
-test('flip starts on landing, before the winner-glow playback finishes',async()=>{
+test('flip starts with the winning sequence, before landing or the winner-glow finishes',async()=>{
   const source=deferredPlayback();let reveals=0,done=false;
   const playback=coordinateHandReveal(source.playback,()=>{reveals++;},15);
   void playback.finished.then(()=>{done=true;});
   await Promise.resolve();assert.equal(reveals,0);
-  source.land();await Promise.resolve();assert.equal(reveals,1);assert.equal(done,false);
+  source.start();await Promise.resolve();assert.equal(reveals,1);assert.equal(done,false);
+  assert.equal(playback.started,source.playback.started);
+  assert.equal(playback.landed,source.playback.landed);
   await new Promise(r=>setTimeout(r,25));assert.equal(done,false);
+  source.land();await Promise.resolve();assert.equal(reveals,1);assert.equal(done,false);
   source.finish();await playback.finished;assert.equal(done,true);assert.equal(reveals,1);
 });
 test('results wait for card-flip completion when landing glow finishes first',async()=>{
   const source=deferredPlayback();let done=false;
   const p=coordinateHandReveal(source.playback,()=>{},25);void p.finished.then(()=>{done=true;});
-  source.land();source.finish();await Promise.resolve();await Promise.resolve();assert.equal(done,false);
+  source.start();source.land();source.finish();await Promise.resolve();await Promise.resolve();assert.equal(done,false);
   await p.finished;assert.equal(done,true);
 });
-test('leaving before landing cancels the reveal; leaving during a flip resolves promptly',async()=>{
+test('leaving before animation start cancels the reveal; leaving during a flip resolves promptly',async()=>{
   const a=deferredPlayback();let count=0;
   const cancelled=coordinateHandReveal(a.playback,()=>{count++;},5000);cancelled.cancel();await cancelled.finished;assert.equal(count,0);
   const b=deferredPlayback();const during=coordinateHandReveal(b.playback,()=>{count++;},5000);
-  b.land();await Promise.resolve();assert.equal(count,1);during.cancel();await during.finished;assert.equal(count,1);
+  b.start();await Promise.resolve();assert.equal(count,1);during.cancel();await during.finished;assert.equal(count,1);
+  const c=deferredPlayback();const sameFrame=coordinateHandReveal(c.playback,()=>{count++;},5000);
+  c.start();sameFrame.cancel();await sameFrame.finished;assert.equal(count,1);
 });
 test('readable stagger duration is bounded and covers the last flipped card',()=>{
   const {final}=finishedFixture();const view=publicRoom(final,'a');
