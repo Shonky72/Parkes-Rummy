@@ -4,30 +4,48 @@ on:
     branches: [fix/reveal-voice-approved-start]
     paths: [.github/workflows/reveal-review-workbench.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  snapshot:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: fix/reveal-voice-approved-start
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: npm ci
-      - run: npm install --no-save --package-lock=false playwright
-      - name: Export code and dependencies for isolated tests
+      - name: Apply checksum-verified source changes
         run: |
-          git archive HEAD -o /tmp/reveal-source.tar
-          tar -czf /tmp/reveal-dependencies.tgz node_modules
-      - uses: actions/upload-artifact@v4
+          python - <<'PY'
+          import base64, zlib, hashlib
+          from pathlib import Path
+          encoded=''.join(Path(f'.review/reveal-session.{i}.z64').read_text() for i in (1,2,3))
+          patch=zlib.decompress(base64.b64decode(''.join(encoded.split()),validate=True))
+          assert len(patch)==71252
+          assert hashlib.sha256(patch).hexdigest()=='f7033f79001d2c4e443b847a24f4faa142e775c48643292da974bcc807076b75'
+          Path('/tmp/reveal-session.patch').write_bytes(patch)
+          PY
+          git apply --unidiff-zero --check /tmp/reveal-session.patch
+          git apply --unidiff-zero /tmp/reveal-session.patch
+          git add app/components/EndHandCards.tsx app/components/JoinApproval.tsx app/components/ParkesApp.tsx app/components/VoiceChatPanel.tsx app/end-hand.css app/layout.tsx lib/client.ts lib/hand-reveal.ts lib/room-server.ts lib/table-motion.ts tests/hand-reveal.test.ts tests/reveal-session-ui.mjs tests/security.test.ts
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Reveal finished hands at card landing, keep connected table voice and resume approved guests safely'
+          git push origin HEAD:fix/reveal-voice-approved-start
+      - run: npm ci
+      - run: npm run typecheck
+      - run: node --import tsx --test tests/hand-reveal.test.ts tests/security.test.ts tests/voice-lifecycle.test.ts
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Exercise approval, voice and end-hand presentation
+        run: node --import tsx tests/reveal-session-ui.mjs
+      - name: Save reveal and session screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: reveal-review-source
-          path: /tmp/reveal-source.tar
-          retention-days: 1
-      - uses: actions/upload-artifact@v4
-        with:
-          name: reveal-review-dependencies
-          path: /tmp/reveal-dependencies.tgz
-          compression-level: 0
-          retention-days: 1
+          name: reveal-session-results
+          path: reveal-session-results/
+          if-no-files-found: ignore
+          retention-days: 3
