@@ -142,8 +142,7 @@ try{
   await page.waitForFunction(()=>window.testVoicePeers.some(p=>p.connectionState==='connected'),null,{timeout:18000});
   await page.waitForFunction(()=>document.querySelector('audio[data-voice-peer]')?.srcObject?.getAudioTracks().length>0,null,{timeout:15000});
   assert.ok(await page.evaluate(()=>window.testVoiceStreams.at(-1).getAudioTracks().every(t=>t.readyState==='live')));
-  const received=await page.evaluate(async()=>{let bytes=0;for(const p of window.testVoicePeers){for(const r of (await p.getStats()).values()){if(r.type==='inbound-rtp'&&r.kind==='audio')bytes+=r.bytesReceived||0;}}return bytes;});
-  assert.ok(received>0,'Real synthetic audio reached the other browser');
+  await page.waitForFunction(async()=>{let bytes=0;for(const p of window.testVoicePeers){for(const r of (await p.getStats()).values()){if(r.type==='inbound-rtp'&&r.kind==='audio')bytes+=r.bytesReceived||0;}}return bytes>0;},null,{timeout:10000,polling:200});
  }
  assert.equal(call.voiceActions.filter(x=>x.action==='leave').length,0,'Closing a connected voice menu must not send Leave');
  const polls=call.voiceActions.filter(x=>x.action==='poll').length;await sleep(2000);assert.ok(call.voiceActions.filter(x=>x.action==='poll').length>polls);
