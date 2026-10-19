@@ -24,10 +24,12 @@ test('identity changes invalidate pending work synchronously, including signing 
   stop();
 });
 
-test('Google return paths preserve only safe room paths and the home screen', () => {
+test('Google return paths preserve only safe rooms and explicit progress destinations', () => {
   assert.equal(safeAccountReturnPath('/join/ABCD'), '/join/ABCD');
   assert.equal(safeAccountReturnPath('/join/ABCD12'), '/join/ABCD12');
+  for (const path of ['/profile', '/competition', '/ladder', `/challenge/${'a'.repeat(43)}`]) assert.equal(safeAccountReturnPath(path), path);
   for (const path of ['/', '/join/ABC', '/join/ABCDE', '/join/abcd', '/join/ABCD?next=https://other.test', '/join/ABCD#hand', '//other.test', 'https://other.test/join/ABCD', '/\\other.test', '/join/%2F%2Fevil', '/api/auth/sign-out']) {
     assert.equal(safeAccountReturnPath(path), '/');
   }
+  for (const path of ['/profile?next=https://evil.test', '/challenge/short', `/challenge/${'a'.repeat(43)}/admin`, '/competition#redirect', '/ladder/../../api/auth/sign-out']) assert.equal(safeAccountReturnPath(path), '/');
 });

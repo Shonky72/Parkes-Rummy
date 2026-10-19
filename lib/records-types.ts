@@ -67,6 +67,8 @@ export interface RoomRecords {
   schemaVersion: 1; engineVersion: string; gameId: string; handId: string | null;
   enabledAt: number; format?: RecordFormat; challengeId?: string;
   completeGameObserved?: boolean;
+  /** Account membership is resolved outside the engine; only seat IDs enter. */
+  eligiblePlayerIds?: string[];
   observedActionId: number;
   eligible: boolean; exclusionReason: string | null;
   current: Record<string, RecordEvidence>;
@@ -76,8 +78,8 @@ export interface RoomRecords {
 export interface RecordRate { count: number; denominator: number; rate: number | null }
 export interface RecordCohortSummary {
   cohortKey: string; conditions: RecordConditions;
-  attempts: number; completed: number; abandoned: number; pending: number; serviceInterrupted: number;
-  successRate: RecordRate; dealtReadyRate: RecordRate; firstDrawReadyRate: RecordRate;
+  attempts: number; settledAttempts: number; completed: number; abandoned: number; pending: number; serviceInterrupted: number;
+  successRate: RecordRate; settledSuccessRate: RecordRate; dealtReadyRate: RecordRate; firstDrawReadyRate: RecordRate; firstDrawCompletedOpeningRate: RecordRate;
   firstChanceRate: RecordRate; naturalRate: RecordRate;
   medianOpeningTurn: number | null; medianClosingTurns: number | null;
   averagePenalty: number | null; penaltySamples: number;
@@ -88,8 +90,8 @@ export interface RecordCohortSummary {
 export interface RuleRecordSummary {
   ruleId: string; game: GameType; ruleNumber: number; title: string; description: string;
   definition: RuleDefinition; example: Meld[]; naturalEligible: boolean;
-  attempts: number; completed: number; pending: number; abandoned: number; serviceInterrupted: number;
-  successRate: RecordRate; dealtReadyRate: RecordRate; firstDrawReadyRate: RecordRate;
+  attempts: number; settledAttempts: number; completed: number; pending: number; abandoned: number; serviceInterrupted: number;
+  successRate: RecordRate; settledSuccessRate: RecordRate; dealtReadyRate: RecordRate; firstDrawReadyRate: RecordRate; firstDrawCompletedOpeningRate: RecordRate;
   firstChanceRate: RecordRate; naturalRate: RecordRate;
   medianOpeningTurn: number | null; medianClosingTurns: number | null;
   best: RecordEvidence | null; cohorts: RecordCohortSummary[];
@@ -105,7 +107,7 @@ export interface EarnedAchievement extends AchievementDefinition {
 export interface RecordsAggregate {
   collectedSince: number | null;
   summary: {
-    attempts: number; completed: number; pending: number; abandoned: number; serviceInterrupted: number;
+    attempts: number; settledAttempts: number; completed: number; pending: number; abandoned: number; serviceInterrupted: number;
     handsWon: number; quickPlayWins: number; fullGameWins: number; fullGames: number;
     masteredRules: number; originalRules: number; quickPlayStreak: number;
   };

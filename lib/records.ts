@@ -25,9 +25,10 @@ export const ACHIEVEMENTS: readonly AchievementDefinition[] = [
 ] as const;
 
 export const RECORDS_POLICY = {
-  attempts: 'Attempts are settled qualifying hands dealt: completed hands plus deliberate withdrawals. Reconnectable hands stay pending; confirmed service interruptions are listed separately.',
-  success: 'Rule success is accepted complete openings divided by settled qualifying hands dealt on the rule, including withdrawals.',
+  attempts: 'Attempts include every qualifying hand dealt, including pending hands and deliberate withdrawals. Confirmed service interruptions are listed separately. Settled attempts exclude pending hands.',
+  success: 'Rule success is confirmed complete openings divided by all qualifying hands dealt, including pending hands and withdrawals. Pending hands await a result. Settled success is shown separately and excludes pending hands.',
   firstDraw: 'First-Draw Ready uses settled hands where the player made a first pickup. An opening already present in the deal also counts as ready after the pickup.',
+  firstDrawCompleted: 'First Pickup Completed the Opening uses settled hands with a first pickup. It counts only openings made possible by that pickup, excluding openings already present in the initial deal.',
   firstChance: 'First-Chance Conversion uses settled hands with a recorded legal opening opportunity. First-turn readiness never counts as a passed legal opportunity.',
   natural: 'Natural Opening Rate uses accepted openings on rules allowing optional wildcards. Natural-only rules and Original Rules’ special natural-twos rule are excluded.',
   comparisons: 'Compare the same complete rule, engine version, format, deal, seat, player count, AI strengths, hints and timer. Equally early openings tie; timestamps never break the tie.',
@@ -98,19 +99,22 @@ function settledRows(rows: RecordEvidence[]): RecordEvidence[] {
 
 function metrics(rows: RecordEvidence[]) {
   const settled = settledRows(rows);
+  const pending = rows.filter(row => row.eligible && row.status === 'started').length;
   const completed = settled.filter(row => row.completed && !!row.actualOpening);
   const firstDraw = settled.filter(row => row.ownTurns >= 1);
   const legal = settled.filter(row => row.firstLegal !== null);
   const natural = completed.filter(row => row.naturalEligible);
   const best = completed.reduce<RecordEvidence | null>((record, row) => !record || row.actualOpening!.turn < record.actualOpening!.turn ? row : record, null);
   return {
-    attempts: settled.length, completed: completed.length,
-    pending: rows.filter(row => row.eligible && row.status === 'started').length,
+    attempts: settled.length + pending, settledAttempts: settled.length, completed: completed.length,
+    pending,
     abandoned: settled.filter(row => row.status === 'abandoned').length,
     serviceInterrupted: rows.filter(row => row.status === 'service-interrupted').length,
-    successRate: rate(completed.length, settled.length),
+    successRate: rate(completed.length, settled.length + pending),
+    settledSuccessRate: rate(completed.length, settled.length),
     dealtReadyRate: rate(settled.filter(row => row.readyFromDeal).length, settled.length),
     firstDrawReadyRate: rate(firstDraw.filter(row => row.firstDrawReady).length, firstDraw.length),
+    firstDrawCompletedOpeningRate: rate(firstDraw.filter(row => row.firstDrawCompletedOpening).length, firstDraw.length),
     firstChanceRate: rate(legal.filter(row => row.actualOpening?.turn === row.firstLegal?.turn && row.opportunitiesPassed === 0).length, legal.length),
     naturalRate: rate(natural.filter(row => row.wildcardCount === 0).length, natural.length),
     medianOpeningTurn: median(completed.map(row => row.actualOpening!.turn)),
@@ -222,7 +226,7 @@ export function aggregateRecords(input: readonly RecordEvidence[]): RecordsAggre
   return {
     collectedSince: rows.length ? Math.min(...rows.map(row => row.startedAt)) : null,
     summary: {
-      attempts: overall.attempts, completed: overall.completed, pending: overall.pending,
+      attempts: overall.attempts, settledAttempts: overall.settledAttempts, completed: overall.completed, pending: overall.pending,
       abandoned: overall.abandoned, serviceInterrupted: overall.serviceInterrupted,
       handsWon: settled.filter(row => row.status === 'completed' && row.wentOut).length,
       quickPlayWins: settled.filter(row => qualifiesQuickPlay(row) && row.status === 'completed' && row.wentOut).length,

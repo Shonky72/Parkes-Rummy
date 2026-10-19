@@ -1,11 +1,8 @@
-import { readSharedRecord, RECORDS_PUBLIC_HEADERS } from '@/lib/records-server';
+import { readSharedRecord } from '@/lib/records-server';
+import { sharedRecordPage } from '@/lib/records-share-page';
 export const dynamic='force-dynamic';
 export const runtime='nodejs';
-const escape=(text:string)=>text.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 export async function GET(request:Request,{params}:{params:Promise<{token:string}>}) {
   const {token}=await params,record=await readSharedRecord(request,token);
-  if(record instanceof Response)return record;
-  const image=`/api/records/share/${token}/image`,title=`${record.displayName}: ${record.ruleName} on Turn ${record.openingTurn}`;
-  const conditions=`${record.conditions.format} · ${record.conditions.playerCount} players · ${record.conditions.humanCount} humans · hints ${record.conditions.hints?'on':'off'}`;
-  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)} | Parkes Rummy</title><meta name="robots" content="noindex,nofollow"><meta property="og:title" content="${escape(title)}"><meta property="og:description" content="Beat my record. A completed Parkes Rummy opening."><meta property="og:image" content="https://parkesrummy.com${image}"><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#062e27;color:#fcf4dd;font:17px system-ui,sans-serif;padding:24px}main{width:min(100%,900px);text-align:center}h1{font-size:clamp(28px,6vw,48px);color:#eed798}p{line-height:1.6}img{width:100%;height:auto;border:1px solid #baa063;border-radius:20px}nav{display:flex;justify-content:center;flex-wrap:wrap;gap:12px;margin:24px 0}a{display:inline-block;text-decoration:none;padding:14px 20px;background:#e6c77d;color:#082f27;border-radius:10px;font-weight:700}.subtle{font-size:14px;color:#c1d4ca}</style></head><body><main><p>Parkes Rummy · IBD Collective</p><h1>Beat my record</h1><p>${escape(title)}</p><img src="${image}" width="1200" height="630" alt="${escape(title)}"><p>${escape(conditions)}</p><p>${escape(record.ruleDescription)}</p><nav><a href="${image}" download="parkes-rummy-record.png">Save image</a><a href="/">Play Parkes Rummy</a></nav><p class="subtle">Verified from a completed hand. Random deals differ; matching conditions keep record comparisons fair. The owner controls this link. Shared links expire after one year and stop working when revoked. An already downloaded image stays with its recipient.</p></main></body></html>`,{headers:{...RECORDS_PUBLIC_HEADERS,'Content-Type':'text/html; charset=utf-8'}});
+  return record instanceof Response ? record : sharedRecordPage(record,token);
 }

@@ -121,6 +121,8 @@ test('a first pickup opening lost to the compulsory discard is not legal readine
   room = applyAction(room, 'owner', { type: 'goDown', cardIds: opening.flatMap(meld => meld.cards.map(held => held.id)) });
   assert.equal(evidence(room).opportunitiesPassed, 0);
   assert.ok(evidence(room).achievements.includes('first-chance'));
+  abandonRecords(room, 'owner');
+  assert.deepEqual(aggregateRecords([evidence(room)]).rules[0].firstDrawCompletedOpeningRate, { count: 1, denominator: 1, rate: 1 });
 });
 
 test('discontinuous legal opportunities count eligible ended turns, not a turn-number difference', () => {
@@ -257,10 +259,14 @@ test('pending evidence never exposes readiness, private combinations, bests or l
   const room = fixture(dealtReady());
   const aggregate = aggregateRecords([evidence(room)]);
   assert.equal(aggregate.summary.pending, 1);
-  assert.equal(aggregate.summary.attempts, 0);
+  assert.equal(aggregate.summary.attempts, 1);
+  assert.equal(aggregate.summary.settledAttempts, 0);
+  assert.deepEqual(aggregate.rules[0].successRate, { count: 0, denominator: 1, rate: 0 });
+  assert.deepEqual(aggregate.rules[0].settledSuccessRate, { count: 0, denominator: 0, rate: null });
   assert.equal(aggregate.recent.length, 0);
   assert.equal(aggregate.rules[0].best, null);
   assert.equal(aggregate.rules[0].dealtReadyRate.denominator, 0);
+  assert.equal(aggregate.rules[0].firstDrawCompletedOpeningRate.denominator, 0);
   assert.ok(aggregate.achievements.every(badge => badge.count === 0));
   const payload = JSON.stringify(publicRoom(room, 'other-1'));
   for (const forbidden of ['records', 'firstReady', 'firstLegal', 'opportunitiesPassed', room.records!.handId!, room.records!.gameId, 'owner-secret']) assert.ok(!payload.includes(forbidden), forbidden);
@@ -301,8 +307,14 @@ test('statistics give exact denominators, medians, optional-natural rates and co
   const rule = result.rules[0];
   assert.deepEqual(rule.successRate, { count: 2, denominator: 3, rate: 2 / 3 });
   assert.deepEqual(rule.firstChanceRate, { count: 1, denominator: 2, rate: .5 });
+  assert.deepEqual(rule.firstDrawReadyRate, { count: 1, denominator: 3, rate: 1 / 3 });
+  assert.deepEqual(rule.firstDrawCompletedOpeningRate, { count: 0, denominator: 3, rate: 0 }, 'already-dealt openings do not count as completed by the first pickup');
   assert.deepEqual(rule.naturalRate, { count: 1, denominator: 2, rate: .5 });
   assert.equal(rule.medianOpeningTurn, 3.5);
+  const pending = structuredClone(fail); pending.handId += '-pending'; pending.status = 'started'; pending.finishedAt = null;
+  const provisional = aggregateRecords([success, other, fail, pending]).rules[0];
+  assert.deepEqual(provisional.successRate, { count: 2, denominator: 4, rate: .5 });
+  assert.deepEqual(provisional.settledSuccessRate, { count: 2, denominator: 3, rate: 2 / 3 });
   const renamed = structuredClone(success);
   renamed.conditions.roster[0].name = 'Friend'; renamed.conditions.roster[0].playerId = 'friend';
   assert.equal(cohortKey(success.conditions), cohortKey(renamed.conditions));

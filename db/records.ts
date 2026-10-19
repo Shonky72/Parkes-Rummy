@@ -257,9 +257,11 @@ export class RecordsRepository {
         if(won&&!friendWon)headToHead.fullGames.you++;else if(friendWon&&!won)headToHead.fullGames.friend++;else if(won&&friendWon)headToHead.fullGames.tied++;else headToHead.fullGames.neither++;
       }
     }
+    const rematchHands=finalMine.filter(one=>finalTheirs.some(two=>two.handId===one.handId&&two.gameId===one.gameId))
+      .sort((one,two)=>two.startedAt-one.startedAt).slice(0,30).map(one=>({handId:one.handId,game:one.game,ruleNumber:one.ruleNumber,startedAt:one.startedAt}));
     // Recheck permission after the reads, including concurrent block/unfriend.
     await this.friendship(userId,friendId,true);
-    return {friend:{id:friendId,displayName:profile.displayName,featuredBadges:profile.featuredBadges},comparisons,headToHead};
+    return {friend:{id:friendId,displayName:profile.displayName,featuredBadges:profile.featuredBadges},comparisons,headToHead,rematchHands};
   }
   async shares(userId: string): Promise<SharePreview[]> {
     await this.ensure();

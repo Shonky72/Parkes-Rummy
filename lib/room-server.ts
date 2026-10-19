@@ -6,7 +6,9 @@ import { PostgresJoinRequests } from '../db/join-requests';
 import { getEntitlements, getPlayerProfile, isFullAccessAdmin } from '../db/entitlements';
 import { resolveAccountUser } from './auth';
 import { readAuthConfig, accountMarker, ACCOUNT_IDENTITY_HEADER, type AccountUser } from './auth-config';
-import { applyAction, createPlayer, createRoom, lastMoveAtFor, publicRoom, ruleNumberFor } from './rummy';
+import { applyAction, createPlayer, createRoom, enableRecords, lastMoveAtFor, publicRoom as publicSocialRoom, ruleNumberFor } from './rummy';
+import { applyChallengeAction, isChallengeRoom, publicChallengeRoom } from './challenge-engine/v1';
+import { assertRankedRoomAccess, heartbeatRankedRoom } from '../db/ladder';
 import { chooseQuickPlaySetup } from './quick-play';
 import { advanceBotTurn } from './bot-turn';
 import { isRoomCode, normalizeRoomCode, ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from './room-code';
@@ -52,6 +54,13 @@ async function hashToken(token: string) {
   return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
 }
 function roomCode() { return Array.from(crypto.getRandomValues(new Uint8Array(ROOM_CODE_LENGTH)), b => ROOM_CODE_ALPHABET[b % ROOM_CODE_ALPHABET.length]).join(''); }
+/** A frozen challenge never falls back to today's social engine or public rule definitions. */
+function publicRoom(room: RoomState, playerId: string) {
+  return isChallengeRoom(room) ? publicChallengeRoom(room, playerId) : publicSocialRoom(room, playerId);
+}
+export function recordsCollectionAllowed(context = process.env.CONTEXT): boolean {
+  return context === 'production';
+}
 function identityChanged(): never {
   throw new ApiError('Your sign-in changed. Refresh your account to continue.', 401, 'ACCOUNT_IDENTITY_CHANGED');
 }
@@ -186,7 +195,14 @@ function roomSummary(room: RoomState, player: PlayerState): RoomSummary {
 
 
 
-export function createRoomHandlers(options: { repository?: RoomRepository; resolveSession?: SessionResolver; configured?: () => boolean; security?: RequestSecurity; joins?: PostgresJoinRequests; entitlements?: typeof getEntitlements; profile?: typeof getPlayerProfile } = {}) {
+export function createRoomHandlers(options: {
+  repository?: RoomRepository; resolveSession?: SessionResolver; configured?: () => boolean;
+  security?: RequestSecurity; joins?: PostgresJoinRequests; entitlements?: typeof getEntitlements;
+  profile?: typeof getPlayerProfile;
+  /** Explicit dependency injection for isolated tests; never read from a request. */
+  captureRecords?: boolean;
+  rankedAccess?: typeof assertRankedRoomAccess; rankedHeartbeat?: typeof heartbeatRankedRoom;
+} = {}) {
   const security = options.security ?? requestSecurity;
   const joins = options.joins ?? new PostgresJoinRequests();
   const entitlementsFor = options.entitlements ?? getEntitlements;
@@ -194,6 +210,32 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
   const repository = options.repository ?? new PostgresRoomRepository();
   const resolveSession = options.resolveSession ?? resolveAccountUser;
   const configured = options.configured ?? (() => readAuthConfig() !== null);
+  const captureRecords = options.captureRecords ?? recordsCollectionAllowed();
+  const rankedAccess = options.rankedAccess ?? assertRankedRoomAccess;
+  const rankedHeartbeat = options.rankedHeartbeat ?? heartbeatRankedRoom;
+  const challengeActions = new Set<GameAction['type']>(['draw', 'goDown', 'layoff', 'layoffMany', 'discard', 'botStep']);
+  const lockedRankedActions = new Set<GameAction['type']>(['addBot', 'removePlayer', 'setDifficulty', 'setGame', 'setMoveHints', 'setTurnLimit', 'setReady', 'rematch', 'leave']);
+  function requireCollectionContext(room: RoomState) {
+    // Skipping observations on an existing production hand would corrupt its
+    // later milestones. Preview clients must return to the production table.
+    if (!captureRecords && (room.records || room.ranked || isChallengeRoom(room))) throw new ApiError('Continue this recorded game on parkesrummy.com. Preview deployments do not change production records.', 409);
+  }
+  async function rankedPermission(record: RoomRecord, identity: Identity, action?: GameAction['type']) {
+    const room = record.room;
+    if (!room.ranked) return;
+    if (!identity.user) throw new ApiError('Sign in to your ranked seat to continue.', 403);
+    if (room.ranked.format !== 'ranked-human-v1' || room.game !== 1 || room.quickPlay
+      || room.players.length < 1 || room.players.length > 2 || room.players.some(player => player.isBot)
+      || room.showMoveHints !== false || room.turnLimitSeconds !== 90
+      || record.memberships.length !== room.players.length
+      || new Set(record.memberships.map(member => member.userId)).size !== record.memberships.length
+      || room.players.some(player => !record.memberships.some(member => member.playerId === player.id))) {
+      throw new ApiError('The ranked table no longer matches the controlled format. Return to Ranked play.', 409);
+    }
+    if (action && lockedRankedActions.has(action)) throw new ApiError('Ranked rules and seats are fixed. Use Ranked play to cancel or forfeit.', 409);
+    if (action === 'start' && room.players.length !== 2) throw new ApiError('Both ranked players must accept before the game starts.', 409);
+    await rankedAccess(room, identity.user.id, action);
+  }
   async function load(code: string) {
     const record = await repository.load(code);
     if (!record) throw new ApiError('Room not found. Check the code with your host.', 404);
@@ -225,6 +267,7 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
           room.quickPlay = { ruleNumber: quickPlay.ruleNumber };
           room = applyAction(room, host.id, { type: 'setGame', game: quickPlay.game });
           for (const difficulty of quickPlay.difficulties) room = applyAction(room, host.id, { type: 'addBot', difficulty });
+          if (captureRecords && identity.user) enableRecords(room, { eligiblePlayerIds: [host.id] });
           room = applyAction(room, host.id, { type: 'start' });
         }
         if (await repository.insert(room, membership)) {
@@ -243,6 +286,8 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
       await security.check(request, 'read');
       const [identity, record] = await Promise.all([identityFor(request, resolveSession), load(codeOf(rawCode))]);
       const player = await authorizedPlayer(record, identity);
+      await rankedPermission(record, identity);
+      if (captureRecords && record.room.ranked && identity.user) await rankedHeartbeat(record.room, identity.user.id);
       return reply({ room: publicRoom(record.room, player.id) });
     }),
     listRoomSummariesRequest: (request: Request) => handle(async () => {
@@ -295,6 +340,8 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
         if (identity.user) {
           const prior = accountPlayer(record, identity.user.id);
           if (prior) {
+            requireCollectionContext(room);
+            await rankedPermission(record, identity);
             const profile = await profileFor(identity.user.id);
             prior.fontId = profile.font; prior.symbolId = profile.symbol;
             room.version = version + 1; room.updatedAt = Date.now();
@@ -307,6 +354,7 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
             && !record.memberships.some(member => member.playerId === player.id));
           if (prior) return reply({ room: publicRoom(room, prior.id), token: priorToken });
         }
+        if (isChallengeRoom(room) || room.ranked) throw new ApiError('This controlled table has fixed seats. Join through Challenges or Ranked play.', 409);
         if (room.status !== 'lobby') throw new ApiError('This game has started. Sign in to your account or reopen your saved seat to return.', 409);
         if (room.players.length >= 8) throw new ApiError('This table has eight players. Ask the host to free a seat.', 409);
         const name = cleanName(body.name);
@@ -343,6 +391,7 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
       }
       const host=await authorizedPlayer(record,identity);
       if(host.id!==record.room.hostId)throw new ApiError('Only the host reviews requests.',403);
+      if(isChallengeRoom(record.room)||record.room.ranked)return reply({requests:[]});
       const entries=await joins.list(code,record.room.createdAt);
       return reply({requests:entries.map(e=>({id:e.id,name:(JSON.parse(e.player) as PlayerState).name,expiresAt:Number(e.expires_at)}))});
     }),
@@ -353,6 +402,7 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
       const code=codeOf(rawCode), record=await load(code);
       const host=await authorizedPlayer(record,identity);
       if(host.id!==record.room.hostId)throw new ApiError('Only the host reviews requests.',403);
+      if(isChallengeRoom(record.room)||record.room.ranked)throw new ApiError('Controlled tables do not admit additional players.',409);
       if(typeof body.id!=='string'||body.id.length>100||!['approve','decline'].includes(String(body.decision)))throw new ApiError('Choose a request and decision.');
       const status=await joins.decide(code,record.room.createdAt,host.id,body.id,body.decision==='approve');
       return reply({status});
@@ -380,6 +430,10 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
         const player = await authorizedPlayer(record, identity);
         const requestKey = `${player.id}:${body.requestId}`;
         if (room.recentActions.includes(requestKey)) return reply({ room: publicRoom(room, player.id) });
+        requireCollectionContext(room);
+        if (isChallengeRoom(room) && !challengeActions.has(action.type)) throw new ApiError('Challenge rules and seats are fixed. Return to Challenges for a separate attempt.', 409);
+        await rankedPermission(record, identity, action.type);
+        if (room.ranked && identity.user) await rankedHeartbeat(room, identity.user.id);
         if (action.type === 'rematch' && action.expectedVersion !== undefined && player.id === room.hostId
           && (room.status !== 'finished' || action.expectedVersion !== room.version)) {
           return reply({ error: 'This game has changed. Review the latest table before starting a rematch.', room: publicRoom(room, player.id) }, 409);
@@ -399,7 +453,12 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
         }
         if (action.type === 'botStep' && (room.status !== 'playing' || !room.players.find(candidate => candidate.id === room.turnPlayerId)?.isBot || Date.now() < room.botDueAt)) return reply({ room: publicRoom(room, player.id) });
         if (action.type === 'timeout' && (room.status !== 'playing' || !room.turnDeadline || Date.now() < room.turnDeadline)) return reply({ room: publicRoom(room, player.id) });
-        const next = action.type === 'botStep' ? advanceBotTurn(room, player.id) : applyAction(room, player.id, action);
+        if (captureRecords && !isChallengeRoom(room) && (action.type === 'start' || action.type === 'nextHand')
+          && record.memberships.some(member => room.players.some(candidate => candidate.id === member.playerId && !candidate.isBot))) {
+          enableRecords(room, { ...(room.ranked ? { format: 'ranked' as const } : {}), eligiblePlayerIds: record.memberships.map(member => member.playerId) });
+        }
+        const next = isChallengeRoom(room) ? applyChallengeAction(room, player.id, action)
+          : action.type === 'botStep' ? advanceBotTurn(room, player.id) : applyAction(room, player.id, action);
         next.recentActions = [...room.recentActions, requestKey].slice(-64);
         if (next.version <= version) next.version = version + 1;
         next.updatedAt = Date.now();
@@ -422,6 +481,8 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
       const record = await load(code);
       const player = await authorizedPlayer(record, identity);
       if (player.id !== record.room.hostId) throw new ApiError('Only the host deletes a whole game.', 403);
+      requireCollectionContext(record.room);
+      if ((isChallengeRoom(record.room) || record.room.ranked) && record.room.status !== 'finished') throw new ApiError('Use Challenges to withdraw or Ranked play to forfeit this active attempt.', 409);
       if (body.expectedVersion !== record.version) throw new ApiError('This game has changed. Refresh before deleting it.', 409);
       if (!await repository.delete(code, record.version)) throw new ApiError('This game has changed. Refresh before deleting it.', 409);
       return reply({ ok: true });
@@ -450,6 +511,9 @@ export function createRoomHandlers(options: { repository?: RoomRepository; resol
       const identity = await accountIdentity(request);
       const code = codeOf(rawCode);
       await security.check(request,'action',identity.user.id);
+      const record = await repository.load(code);
+      if (record?.room.ranked) requireCollectionContext(record.room);
+      if (record && isChallengeRoom(record.room) && record.room.status !== 'finished') throw new ApiError('Return to Challenges to resume or withdraw this active attempt.', 409);
       // Idempotent and scoped to this identity. Does not delete another person's game.
       await repository.setHidden(code, identity.user.id, true);
       return reply({ ok: true });

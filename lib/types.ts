@@ -70,6 +70,11 @@ export interface RoomState {
 export interface PublicRoom {
   /** Announces the locked format without exposing private admission identifiers. */
   ranked?: { format: 'ranked-human-v1' };
+  /** Owner-only completed-hand highlight. Absent during play and the lobby. */
+  completedRecord?: {
+    handId: string; openingTurn: number | null; firstLegalTurn: number | null;
+    opportunitiesPassed: number; achievements: string[];
+  };
   /** Present only on new single-hand Quick Play rooms; old saves retain normal progression. */
   quickPlay?: { ruleNumber: number };
   code: string; hostId: string; game: GameType; round: number;

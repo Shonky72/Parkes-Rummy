@@ -626,6 +626,7 @@ export function createRoom(code: string, host: PlayerState): RoomState {
 export function publicRoom(original: RoomState, youId: string): PublicRoom {
   const room = normalizeRoomProgression(original);
   const own = room.players.find(player => player.id === youId);
+  const completedRecord = completedRecordFor(room, youId);
   return {
     code: room.code, hostId: room.hostId, game: room.game, round: room.round, status: room.status,
     ...(room.quickPlay ? { quickPlay: { ...room.quickPlay } } : {}),
@@ -639,6 +640,20 @@ export function publicRoom(original: RoomState, youId: string): PublicRoom {
     showMoveHints: room.showMoveHints !== false,
     result: room.result, history: room.history, events: room.events, version: room.version, botDueAt: room.botDueAt,
     updatedAt: room.updatedAt, lastMoveAt: lastMoveAtFor(room),
+    ...(completedRecord ? { completedRecord } : {}),
+  };
+}
+
+/** Share only a minimal finished-hand highlight; private observations stay private. */
+export function completedRecordFor(room: RoomState, youId: string): PublicRoom['completedRecord'] | undefined {
+  if ((room.status !== 'round-end' && room.status !== 'finished') || !room.result) return undefined;
+  const evidence = room.records?.current[youId];
+  if (!evidence?.eligible || evidence.status !== 'completed' || evidence.handId !== room.records?.handId
+    || !room.result.scores.some(row => row.playerId === youId)) return undefined;
+  return {
+    handId: evidence.handId, openingTurn: evidence.actualOpening?.turn ?? null,
+    firstLegalTurn: evidence.firstLegal?.turn ?? null, opportunitiesPassed: evidence.opportunitiesPassed,
+    achievements: [...evidence.achievements],
   };
 }
 
@@ -969,9 +984,13 @@ export interface RecordsEngine {
 
 /** Activate before a new game starts. Existing or tutorial hands are never backfilled. */
 export function enableRecords(room: RoomState, options: {
-  format?: RecordFormat; challengeId?: string; eligible?: boolean; exclusionReason?: string;
+  format?: RecordFormat; challengeId?: string; eligible?: boolean; exclusionReason?: string; eligiblePlayerIds?: string[];
 } = {}): void {
-  if (room.records || (room.status !== 'lobby' && room.status !== 'round-end')) return;
+  if (room.status !== 'lobby' && room.status !== 'round-end') return;
+  if (room.records) {
+    if (options.eligiblePlayerIds) room.records.eligiblePlayerIds = [...options.eligiblePlayerIds];
+    return;
+  }
   room.records = {
     schemaVersion: 1, engineVersion: RECORDS_ENGINE_VERSION,
     gameId: globalThis.crypto.randomUUID(), handId: null, enabledAt: Date.now(),
@@ -1061,8 +1080,8 @@ function startRecordsHand(room: RoomState, newGame: boolean, engine: RecordsEngi
       schemaVersion: 1, gameId: records.gameId, handId: records.handId, playerId: player.id,
       game: room.game, ruleNumber, ruleId: `${room.game}:${ruleNumber}`, handNumber: room.round,
       startedAt: now, finishedAt: null, status: 'started',
-      eligible: records.eligible && !player.isBot,
-      exclusionReason: player.isBot ? 'AI seat' : records.exclusionReason, conditions,
+      eligible: records.eligible && !player.isBot && (!records.eligiblePlayerIds || records.eligiblePlayerIds.includes(player.id)),
+      exclusionReason: player.isBot ? 'AI seat' : records.eligiblePlayerIds && !records.eligiblePlayerIds.includes(player.id) ? 'guest seat' : records.exclusionReason, conditions,
       readyFromDeal: !!opening, firstDrawReady: false, firstDrawCompletedOpening: false,
       firstReady: opening ? { turn: 0, actionId, opening: clone(opening) } : null,
       firstLegal: null, actualOpening: null, opportunitiesPassed: 0, legalOpportunityTurns: [],

@@ -31,5 +31,7 @@ export const setClientIdentity = guard.change;
 
 export function safeAccountReturnPath(value: string): string {
   // OAuth callbacks never accept a caller-supplied host, query or fragment.
-  return /^\/join\/[A-Z0-9]{4}(?:[A-Z0-9]{2})?$/.test(value) ? value : '/';
+  return /^\/join\/[A-Z0-9]{4}(?:[A-Z0-9]{2})?$/.test(value)
+    || /^\/(profile|competition|ladder)$/.test(value)
+    || /^\/challenge\/[A-Za-z0-9_-]{43}$/.test(value) ? value : '/';
 }
