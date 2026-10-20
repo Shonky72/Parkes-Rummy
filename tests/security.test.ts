@@ -112,8 +112,8 @@ test('distinct-code probes and rotated anonymous presence IDs are bounded; a sha
 });
 
 test('advertising requires all eligibility conditions; CSP blocks framing and has a fresh bootstrap nonce',()=>{
- const allowed={enabled:true,consent:'accepted',ready:true,adFree:false};assert.equal(advertisingAllowed(allowed),true);
- for(const changed of [{enabled:false},{consent:null},{consent:'declined'},{ready:false},{adFree:true}])assert.equal(advertisingAllowed({...allowed,...changed}),false);
+ const allowed={enabled:true,consent:'accepted',ready:true,adFree:false,pathname:'/how-to-play'};assert.equal(advertisingAllowed(allowed),true);
+ for(const changed of [{enabled:false},{consent:null},{consent:'declined'},{ready:false},{adFree:true},{pathname:'/'},{pathname:'/play?tab=store'}])assert.equal(advertisingAllowed({...allowed,...changed}),false);
  const policy=contentSecurityPolicy('test-nonce');assert.match(policy,/frame-ancestors 'none'/);assert.match(policy,/script-src[^;]*'nonce-test-nonce'/);assert.ok(!/script-src[^;]*'unsafe-inline'/.test(policy));
 });
 

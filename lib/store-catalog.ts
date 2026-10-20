@@ -53,7 +53,7 @@ export type EntitlementKey = 'remove_ads' | 'premium_fonts' | 'premium_symbols' 
 export interface PlayerProfile { font: FontId; symbol: SymbolId }
 
 export const STORE_PRODUCTS: Readonly<Record<StoreProductKey, { label: string; amount: number; env: string; grants: readonly EntitlementKey[]; description: string }>> = {
-  remove_ads: { label: 'Remove Ads', amount: 199, env: 'STRIPE_REMOVE_ADS_PRICE_ID', grants: ['remove_ads'], description: 'Never see Parkes Rummy ads again.' },
+  remove_ads: { label: 'Remove Ads', amount: 199, env: 'STRIPE_REMOVE_ADS_PRICE_ID', grants: ['remove_ads'], description: 'Remove advertising from public guides while signed in.' },
   fonts_pack: { label: 'Fonts Pack', amount: 199, env: 'STRIPE_FONTS_PRICE_ID', grants: ['premium_fonts'], description: 'Unlock all premium player-name styles.' },
   symbols_pack: { label: 'Symbols Pack', amount: 199, env: 'STRIPE_SYMBOLS_PRICE_ID', grants: ['premium_symbols'], description: 'Unlock the full player-symbol collection.' },
   voice_access: { label: 'Voice Chat', amount: 299, env: 'STRIPE_VOICE_PRICE_ID', grants: ['voice_chat'], description: 'Unlock table voice chat for this account.' },
