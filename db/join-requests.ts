@@ -13,12 +13,15 @@ export class PostgresJoinRequests {
   private ready: Promise<unknown>|undefined;
   constructor(private readonly db:SqlDatabase=database){}
   async ensure(){this.ready??=this.db.query(JOIN_SCHEMA).catch(e=>{this.ready=undefined;throw e;});await this.ready;}
-  async submit(code:string,instance:number,actor:string,userId:string|null,player:PlayerState){
+  async submit(code:string,instance:number,actor:string,userId:string|null,player:PlayerState,validateRoom?:(room:RoomState)=>void){
     await this.ensure();
     return this.db.transaction(async c=>{
       const locked=await c.query<{state:string}>('SELECT state FROM rooms WHERE code=$1 FOR UPDATE',[code]);
       const room=locked.rows[0]?JSON.parse(locked.rows[0].state) as RoomState:null;
       if(!room||room.createdAt!==instance||room.status!=='lobby')throw new SecurityError('This lobby is no longer open.',409);
+      // Recheck against the locked state if production started/rematched after
+      // the handler's initial read. A preview cannot bypass collection guards.
+      validateRoom?.(room);
       const now=Date.now();
       await c.query('DELETE FROM join_requests WHERE expires_at<=$1',[now]);
       const prior=await c.query<JoinEntry>('SELECT * FROM join_requests WHERE room_code=$1 AND room_instance=$2 AND actor=$3',[code,instance,actor]);
@@ -36,12 +39,13 @@ export class PostgresJoinRequests {
   async list(code:string,instance:number){await this.ensure();return (await this.db.query<JoinEntry>("SELECT * FROM join_requests WHERE room_code=$1 AND room_instance=$2 AND status='pending' AND expires_at>$3 ORDER BY expires_at",[code,instance,Date.now()])).rows;}
   async own(code:string,instance:number,actor:string){await this.ensure();return (await this.db.query<JoinEntry>('SELECT * FROM join_requests WHERE room_code=$1 AND room_instance=$2 AND actor=$3 AND expires_at>$4',[code,instance,actor,Date.now()])).rows[0]??null;}
   async cancel(code:string,instance:number,actor:string){await this.ensure();await this.db.query("UPDATE join_requests SET status='cancelled' WHERE room_code=$1 AND room_instance=$2 AND actor=$3 AND status='pending'",[code,instance,actor]);}
-  async decide(code:string,instance:number,hostId:string,id:string,approve:boolean){
+  async decide(code:string,instance:number,hostId:string,id:string,approve:boolean,validateRoom?:(room:RoomState)=>void){
     await this.ensure();
     return this.db.transaction(async c=>{
       const r=await c.query<{state:string;version:number}>('SELECT state,version FROM rooms WHERE code=$1 FOR UPDATE',[code]);
       const room=r.rows[0]?JSON.parse(r.rows[0].state) as RoomState:null;
       if(!room||room.createdAt!==instance||room.hostId!==hostId)throw new SecurityError('Only the current host can review this request.',403);
+      validateRoom?.(room);
       const rows=await c.query<JoinEntry>('SELECT * FROM join_requests WHERE id=$1 AND room_code=$2 AND room_instance=$3 FOR UPDATE',[id,code,instance]);
       const entry=rows.rows[0];
       if(!entry||Number(entry.expires_at)<=Date.now())throw new SecurityError('This request has expired.',410);

@@ -1,0 +1,227 @@
+{
+  "startedAt": "2026-10-20T00:41:34.276Z",
+  "finishedAt": "2026-10-20T00:42:15.017Z",
+  "node": "v24.19.0",
+  "baseline": "8950a3cf87fd7d8a2530108003d5208b05a62418",
+  "branch": "fix/build-deployment-context",
+  "sourceFiles": [
+    {
+      "path": "next.config.ts",
+      "sha256": "ba2e56d817a28fc58218556710401fa3f864db6430a04a510d0400417820f9c4",
+      "bytes": 689
+    },
+    {
+      "path": "lib/deployment-context.ts",
+      "sha256": "893f29e1bd921a1eb2f41b1eb587ea6726e1ff292a27b856404ac112bed8bcf1",
+      "bytes": 527
+    },
+    {
+      "path": "lib/room-server.ts",
+      "sha256": "39397b97768ed35fa793a41e50f0bdc0e1bd4d307bebd59bf1ca6482f1ec2fc3",
+      "bytes": 37564
+    },
+    {
+      "path": "lib/records-server.ts",
+      "sha256": "2763613a3e142db3c27b832c484f6d7530b78bd5e05c498c75515a1a58391af7",
+      "bytes": 5683
+    },
+    {
+      "path": "lib/competition-server.ts",
+      "sha256": "32502417578d402461f02c42e77da0183bcb43443222194779c093d9bbca6b94",
+      "bytes": 6998
+    },
+    {
+      "path": "lib/ladder-server.ts",
+      "sha256": "37150f5387dc570a00e4802ead8681ad2b4a251ce4a1c59fb816a8bc2ec77501",
+      "bytes": 5779
+    },
+    {
+      "path": "db/activity.ts",
+      "sha256": "75c24509ea1b046b62b7d162fec7fea76f7e0693024291015a8d87c3962b0788",
+      "bytes": 10850
+    },
+    {
+      "path": "db/join-requests.ts",
+      "sha256": "d836ff5377def34d6d36069c9863cf647a0132ee9ef869492e2321c5ffdcc26d",
+      "bytes": 6031
+    },
+    {
+      "path": "app/api/activity/presence/route.ts",
+      "sha256": "1c6d91730d4063cc39c8000f86b5b0643603003587522b953347a390f572966a",
+      "bytes": 557
+    },
+    {
+      "path": "package.json",
+      "sha256": "e5308ff57a0669fe0f6d5cd0f9bf9eb9a57f11816e9e70aab33c63b7b70dcf20",
+      "bytes": 1235,
+      "fromBaseline": true
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "be8dfa240f22c4ad98908cb7fb3ef669af8da131ec2ba2893e0faf43b3fac436",
+      "bytes": 281223,
+      "fromBaseline": true
+    }
+  ],
+  "tests": [
+    {
+      "label": "production",
+      "buildContext": "production",
+      "buildId": "DpKFvFNlMz4PJ2RCWweSM",
+      "runtimeContext": null,
+      "runtimeParkesDeployContext": null,
+      "assertions": [
+        {
+          "method": "GET",
+          "endpoint": "/api/records",
+          "expectedStatus": 401,
+          "status": 401,
+          "body": "{\"error\":\"Sign in with Google to save your records.\"}",
+          "cacheControl": "private, no-store, max-age=0",
+          "passed": true
+        },
+        {
+          "method": "GET",
+          "endpoint": "/api/competition",
+          "expectedStatus": 401,
+          "status": 401,
+          "body": "{\"error\":\"Sign in with Google to play and save your challenge attempts.\"}",
+          "cacheControl": "private, no-store, max-age=0",
+          "passed": true
+        },
+        {
+          "method": "GET",
+          "endpoint": "/api/ladder",
+          "expectedStatus": 401,
+          "status": 401,
+          "body": "{\"error\":\"Sign in with Google for ranked play.\"}",
+          "cacheControl": "private, no-store, max-age=0",
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "label": "preview",
+      "buildContext": "deploy-preview",
+      "buildId": "Wul9g4Jwwk0AilwOTeBVt",
+      "runtimeContext": "production",
+      "runtimeParkesDeployContext": null,
+      "assertions": [
+        {
+          "method": "GET",
+          "endpoint": "/api/records",
+          "expectedStatus": 409,
+          "status": 409,
+          "body": "{\"error\":\"Open records on parkesrummy.com. Preview deployments do not access or change saved records.\"}",
+          "cacheControl": "private, no-store, max-age=0",
+          "passed": true
+        },
+        {
+          "method": "GET",
+          "endpoint": "/api/competition",
+          "expectedStatus": 409,
+          "status": 409,
+          "body": "{\"error\":\"Continue Challenges on parkesrummy.com. Preview deployments do not create or change competition records.\"}",
+          "cacheControl": "private, no-store, max-age=0",
+          "passed": true
+        },
+        {
+          "method": "GET",
+          "endpoint": "/api/ladder",
+          "expectedStatus": 409,
+          "status": 409,
+          "body": "{\"error\":\"Continue ranked play on parkesrummy.com. Preview deployments do not create or change ladder records.\"}",
+          "cacheControl": "private, no-store, max-age=0",
+          "passed": true
+        },
+        {
+          "method": "POST",
+          "endpoint": "/api/activity/presence",
+          "expectedStatus": 204,
+          "status": 204,
+          "bodyBytes": 0,
+          "setCookie": false,
+          "cacheControl": "no-store",
+          "passed": true
+        }
+      ],
+      "passed": true
+    }
+  ],
+  "builds": [
+    {
+      "label": "production",
+      "buildContext": "production",
+      "exitCode": 0,
+      "seconds": 15.107,
+      "buildId": "DpKFvFNlMz4PJ2RCWweSM"
+    },
+    {
+      "label": "preview",
+      "buildContext": "deploy-preview",
+      "exitCode": 0,
+      "seconds": 14.381,
+      "buildId": "Wul9g4Jwwk0AilwOTeBVt"
+    }
+  ],
+  "isolation": {
+    "source": "git archive of the recorded baseline plus only 9 explicitly listed deployment-context files",
+    "dependencies": "Copied local package files; no external dependency symlink or dependency installation",
+    "environmentKeys": [
+      "PATH",
+      "LANG",
+      "LC_ALL",
+      "NODE_ENV",
+      "NEXT_TELEMETRY_DISABLED"
+    ],
+    "credentials": "Build/server environment is allow-listed; no application, auth, database or platform credentials",
+    "servers": "127.0.0.1 only; requests contain no authentication or production data",
+    "rootRepositoryEdits": false
+  },
+  "limits": "Verifies compiled Next authorization/presence gates for the exact local sources. It does not verify a Netlify production deployment or authenticated database-backed gameplay.",
+  "passed": true,
+  "rootSourceRecheck": {
+    "checkedAt": "2026-10-20T00:42:47.737Z",
+    "files": [
+      {
+        "path": "next.config.ts",
+        "matchesTestedSource": true
+      },
+      {
+        "path": "lib/deployment-context.ts",
+        "matchesTestedSource": true
+      },
+      {
+        "path": "lib/room-server.ts",
+        "matchesTestedSource": true
+      },
+      {
+        "path": "lib/records-server.ts",
+        "matchesTestedSource": true
+      },
+      {
+        "path": "lib/competition-server.ts",
+        "matchesTestedSource": true
+      },
+      {
+        "path": "lib/ladder-server.ts",
+        "matchesTestedSource": true
+      },
+      {
+        "path": "db/activity.ts",
+        "matchesTestedSource": true
+      },
+      {
+        "path": "db/join-requests.ts",
+        "matchesTestedSource": true
+      },
+      {
+        "path": "app/api/activity/presence/route.ts",
+        "matchesTestedSource": true
+      }
+    ],
+    "allMatch": true
+  },
+  "scope": "Local compiled production and deploy-preview authorization gates, without application credentials. Production publication is verified separately."
+}

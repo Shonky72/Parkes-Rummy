@@ -22,7 +22,7 @@ jobs:
       - run: node --import tsx --test tests/original-rules.test.ts tests/tutorial.test.ts tests/quick-play.test.ts tests/tutorial-coaching.test.ts tests/phone-install.test.ts tests/bot-turn.test.ts tests/bot-turn-api.test.ts tests/rummy.test.ts tests/rule-progression.test.ts tests/draw-card-drag.test.ts tests/meld-layout.test.ts tests/request-origin.test.ts tests/activity.test.ts tests/hand-reveal.test.ts
       - run: npm run test:backend
       - name: Verify records, frozen challenges, clubs and ranked integrity
-        run: node --import tsx --test tests/client-identity.test.ts tests/records-engine.test.ts tests/records-api.test.ts tests/records-room-api.test.ts tests/competition.test.ts tests/competition-api.test.ts tests/ladder-api.test.ts
+        run: node --import tsx --test tests/deployment-context.test.ts tests/client-identity.test.ts tests/records-engine.test.ts tests/records-api.test.ts tests/records-room-api.test.ts tests/competition.test.ts tests/competition-api.test.ts tests/ladder-api.test.ts
       - run: node tests/activity-fixture.mjs && npm run build
       - run: rm -rf app/__activity_ui_fixture
       - name: Install browser test tools
@@ -93,6 +93,11 @@ jobs:
         env:
           NETLIFY_PR_NUMBER: ${{ github.event.pull_request.number }}
         run: node tests/netlify-room-origin.mjs
+      - name: Confirm built Netlify preview cannot write competition or visitor records
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          NETLIFY_PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node tests/netlify-deployment-context.mjs
       - name: Save table refinement screenshots and checks
         if: always()
         uses: actions/upload-artifact@v4

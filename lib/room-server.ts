@@ -15,6 +15,7 @@ import { isRoomCode, normalizeRoomCode, ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } f
 import { ROOM_PROTOCOL, ROOM_PROTOCOL_HEADER, ROOM_UPDATE_MESSAGE } from './room-protocol';
 import { isAllowedRoomWriteOrigin } from './request-origin';
 import { recordActivityGameStart } from '../db/activity';
+import { deploymentContext } from './deployment-context';
 import type { Difficulty, GameAction, PlayerState, RoomState, RoomSummary, RoomSummaryResult } from './types';
 
 class ApiError extends Error {
@@ -58,7 +59,7 @@ function roomCode() { return Array.from(crypto.getRandomValues(new Uint8Array(RO
 function publicRoom(room: RoomState, playerId: string) {
   return isChallengeRoom(room) ? publicChallengeRoom(room, playerId) : publicSocialRoom(room, playerId);
 }
-export function recordsCollectionAllowed(context = process.env.CONTEXT): boolean {
+export function recordsCollectionAllowed(context = deploymentContext()): boolean {
   return context === 'production';
 }
 function identityChanged(): never {
@@ -355,13 +356,14 @@ export function createRoomHandlers(options: {
           if (prior) return reply({ room: publicRoom(room, prior.id), token: priorToken });
         }
         if (isChallengeRoom(room) || room.ranked) throw new ApiError('This controlled table has fixed seats. Join through Challenges or Ranked play.', 409);
+        requireCollectionContext(room);
         if (room.status !== 'lobby') throw new ApiError('This game has started. Sign in to your account or reopen your saved seat to return.', 409);
         if (room.players.length >= 8) throw new ApiError('This table has eight players. Ask the host to free a seat.', 409);
         const name = cleanName(body.name);
         const profile = identity.user ? await profileFor(identity.user.id) : {font:'default',symbol:'initials'} as const;
         const actor = identity.user ? accountMarker(identity.user.id) : await hashToken(token);
         const pending = await joins.submit(code,room.createdAt,actor,identity.user?.id??null,
-          createPlayer({id:playerId,name,tokenHash,color:0,fontId:profile.font,symbolId:profile.symbol}));
+          createPlayer({id:playerId,name,tokenHash,color:0,fontId:profile.font,symbolId:profile.symbol}),requireCollectionContext);
         if(pending.status==='declined')throw new ApiError('The host declined your request. Please wait before requesting again.',403);
         // An old approval cannot admit a removed player again.
         if(pending.status==='approved')throw new ApiError('This seat was removed. Please wait before requesting again.',403);
@@ -403,8 +405,9 @@ export function createRoomHandlers(options: {
       const host=await authorizedPlayer(record,identity);
       if(host.id!==record.room.hostId)throw new ApiError('Only the host reviews requests.',403);
       if(isChallengeRoom(record.room)||record.room.ranked)throw new ApiError('Controlled tables do not admit additional players.',409);
+      requireCollectionContext(record.room);
       if(typeof body.id!=='string'||body.id.length>100||!['approve','decline'].includes(String(body.decision)))throw new ApiError('Choose a request and decision.');
-      const status=await joins.decide(code,record.room.createdAt,host.id,body.id,body.decision==='approve');
+      const status=await joins.decide(code,record.room.createdAt,host.id,body.id,body.decision==='approve',requireCollectionContext);
       return reply({status});
     }),
     cancelJoinRequest: (request: Request, rawCode: string) => handle(async () => {
@@ -414,6 +417,7 @@ export function createRoomHandlers(options: {
       const code=codeOf(rawCode), record=await load(code);
       const actor=identity.user?accountMarker(identity.user.id):identity.token&&/^[a-f0-9]{64}$/.test(identity.token)?await hashToken(identity.token):null;
       if(!actor)throw new ApiError('Your request is unavailable.',401);
+      requireCollectionContext(record.room);
       await joins.cancel(code,record.room.createdAt,actor);return reply({ok:true});
     }),
     actionRoomRequest: (request: Request, rawCode: string) => handle(async () => {
