@@ -38,12 +38,23 @@ jobs:
       - name: Verify all three gamification releases through real services and isolated SQL
         if: ${{ !cancelled() && steps.browser_tools.outcome == 'success' }}
         run: node --import tsx tests/gamification-ui.mjs
+      - name: Verify earned records appear after the full winning-card reveal
+        if: ${{ !cancelled() && steps.browser_tools.outcome == 'success' }}
+        run: node --import tsx tests/records-result-ui.mjs
       - name: Save gamification screenshots and checks
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gamification-results
           path: gamification-results/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Save authenticated result-highlight screenshots and checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: records-result-results
+          path: records-result-results/
           if-no-files-found: ignore
           retention-days: 14
       - name: Save reveal and session screenshots

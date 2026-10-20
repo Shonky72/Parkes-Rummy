@@ -75,7 +75,9 @@ await saveSample(owner, sampleEvidence('pending-seat', { status: 'started', fini
 const port = await new Promise(resolve => { const server = createPortServer(); server.listen(0, '127.0.0.1', () => { const port = server.address().port; server.close(() => resolve(port)); }); });
 const nextBase = process.env.GAMIFICATION_TEST_BASE_URL || `http://127.0.0.1:${port}`;
 let base;
-const server = process.env.GAMIFICATION_TEST_BASE_URL ? null : spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '--hostname', '127.0.0.1', '-p', String(port)], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, NEXT_TELEMETRY_DISABLED: '1' } });
+const serverEnvironment = { ...process.env, CONTEXT: 'deploy-preview', NEXT_TELEMETRY_DISABLED: '1' };
+for (const key of ['DATABASE_URL', 'NETLIFY_DATABASE_URL', 'NETLIFY_DATABASE_URL_UNPOOLED', 'NEON_DATABASE_URL']) delete serverEnvironment[key];
+const server = process.env.GAMIFICATION_TEST_BASE_URL ? null : spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '--hostname', '127.0.0.1', '-p', String(port)], { stdio: ['ignore', 'pipe', 'pipe'], env: serverEnvironment });
 let serverLog = ''; server?.stdout.on('data', data => { serverLog += data; }); server?.stderr.on('data', data => { serverLog += data; });
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 let browser, lastPage;
@@ -83,7 +85,7 @@ const checks = [], errors = [], downloadDiagnostics = [];
 let failure;
 function pass(name) { checks.push(name); console.log(`PASS: ${name}`); }
 function isolatedApi(user) {
-  const session = { user };
+  const session = { user }, responses = [];
   const resolveSession = async () => session.user;
   const recordApi = createRecordsHandlers({ records, resolveSession, security });
   const competitionApi = createCompetitionHandlers({ competition, resolveSession, security, enabled: true });
@@ -91,9 +93,10 @@ function isolatedApi(user) {
   const roomApi = createRoomHandlers({ repository: rooms, resolveSession, security, captureRecords: true, configured: () => true,
     joins: new PostgresJoinRequests(db), profile: styles, entitlements: async () => entitlements,
     rankedAccess: (room, userId, action) => ladder.assertAccess(room, userId, action), rankedHeartbeat: (room, userId) => room.ranked ? ladder.heartbeat(userId, room.ranked.matchId) : Promise.resolve() });
-  return { session, async handle(request) {
+  return { session, responses, async handle(request) {
     const url = new URL(request.url);
     const path = url.pathname;
+    const mutation = path === '/api/competition' && request.method === 'POST' ? await request.clone().json() : null;
     const json = (data, status = 200) => Response.json(data, { status, headers: { [ROOM_PROTOCOL_HEADER]: ROOM_PROTOCOL } });
     let response;
     if (path === '/api/account/session') response = json({ configured: true, user: session.user, entitlements, profile: await styles(), accessAdmin: false });
@@ -118,6 +121,7 @@ function isolatedApi(user) {
       else if (action === 'join-requests') response = json({ requests: [] });
       else response = await roomApi.readRoomRequest(request, code);
     } else response = json({ error: `Unexpected isolated test endpoint ${path}` }, 404);
+    if (mutation) responses.push({ action: mutation.action, status: response.status, data: await response.clone().json() });
     return response;
   } };
 }
@@ -126,7 +130,7 @@ function isolatedApi(user) {
 // Serve the actual isolated handlers over HTTP so fetches and saved images use
 // exactly the same database and authorization rules. The test-only session
 // cookie exists solely in this local harness, never in application source.
-const sessions = new Map(), anonymousApi = isolatedApi(null);
+const sessions = new Map(), browserApis = new Map(), anonymousApi = isolatedApi(null);
 const apiErrors = [];
 const proxy = createHttpServer(async (incoming, outgoing) => {
   try {
@@ -163,7 +167,7 @@ async function contextFor(user, options = {}) {
   context.on('response', response => { if (response.url().includes('/share/')) downloadDiagnostics.push({ url: response.url(), status: response.status() }); });
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const api = isolatedApi(user), session = api.session, sessionId = crypto.randomUUID();
-  sessions.set(sessionId, api);
+  sessions.set(sessionId, api); browserApis.set(context, api);
   await context.addCookies([{ name: 'parkes_ui_session', value: sessionId, url: base, httpOnly: true, sameSite: 'Lax' }]);
   await context.addInitScript(() => {
     try { localStorage.setItem('parkes-rummy:advertising-consent-v1', 'declined'); } catch { /* Opaque browser download frames have no storage. */ }
@@ -324,7 +328,7 @@ try {
   assert.equal((await rooms.load(practice.roomCode)).room.records.eligible, false);
   pass('Focused daily landing starts a real frozen game; draw persists; simultaneous reconnects reuse the first attempt; practice earns no records');
 
-  checks.push(...await runCompetitionUi({ page, otherPage: other.page, outsiderPage: outsider.page, base, competition, records, rooms, db, owner, friend, friendship, finishChallenge, output }));
+  checks.push(...await runCompetitionUi({ page, otherPage: other.page, outsiderPage: outsider.page, base, competition, records, rooms, db, owner, friend, friendship, finishChallenge, output, readMutation: (target, action) => browserApis.get(target.context()).responses.findLast(value => value.action === action) }));
 
   // Ranked invitations remain opt-in for each player, then create a real locked
   // two-human table. The explicit forfeit flow settles its rating transaction.

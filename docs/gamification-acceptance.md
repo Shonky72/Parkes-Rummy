@@ -1,0 +1,81 @@
+# Gamification acceptance
+
+## Status and evidence boundary
+
+Audit date: 20 October 2026. Scope: all three releases and catalogue items 1–40 in the approved **Parkes Rummy Gamification Implementation Handover**, against the integrated `feature/rule-records-achievements` source.
+
+The three releases have implementation and focused engine/service evidence. This is **not a production completion claim**. The full extended competition browser run and focused post-reveal check pass. Final exact-head CI and exact-deployment confirmation remain release gates. The source checkpoint, rollout queue and eventual production identity belong in [gamification-progress.md](gamification-progress.md).
+
+Two presentation corrections identified during this audit are now integrated: the individual review shows the recorded closing-turn count, and shared results expose material AI/timer/seat/version conditions. Their final browser verification passes. No additional omitted catalogue feature was found in the source review.
+
+## Release 1: records and bragging rights
+
+Players enter through **Settings → My profile, records & achievements**, then `/profile`. The existing home tabs and game table remain in place.
+
+| Approved scope | Implemented completion evidence |
+| --- | --- |
+| 1: all 40 complete Rule Records | Engine-derived titles, restrictions and exact validated visual examples; whole-opening best cards and personal turn; per-condition samples and statistics. Games 1–3 and Original Rules each expose ten pages. [`lib/rummy.ts`](../lib/rummy.ts), [`lib/records.ts`](../lib/records.ts), [`ProfilePanel.tsx`](../app/components/ProfilePanel.tsx); all 40 examples have engine tests and browser rendering checks. |
+| 2–5: dealing, pickup, legal opportunity and review | Separate original-ten-card readiness, readiness after first pickup, pickup-created opening, first legal opportunity, accepted Go Down, and eligible turns passed. The compulsory discard can break or change a valid partition. First-turn readiness creates no false legal opportunity. Capture follows accepted engine actions and uses the exact disjoint-opening solver. |
+| 6–10: success and efficiency | Opening success includes every qualifying dealt hand, including pending and withdrawn hands. Successful-opening medians retain sample counts and comparable conditions. Optional-natural openings, closing speed, leftover penalties, the latest-five versus previous-five improvement, and costly-rule groups are displayed. Interrupted/practice hands are identified and excluded where required. |
+| 11–12: head-to-head and collections | Accepted-friend comparisons separate completed hands, Quick Play and fully observed full-game results. They compare matching rule/condition cohorts. Visual meld collections retain accepted sets/runs/suited runs, while complete special combinations remain in the stricter Rule Records book. |
+| 13–28: complete achievement catalogue | All 16 named badges exist: Born Ready; Chomping at the Bit; First Chance; Natural Talent; Royal Appointment; Heart of Parkes; Runway Closed; Borrowed Space; Six of the Best; Suit Yourself; Clean Sweep; Comeback Kid; By a Whisker; Against the Table; All-Rounder; On a Roll. Groups distinguish favourable deals, smart play, mastery and rivalries. Repetition milestones are 5/25/100; rare badges retain distinct identities. Awards derive from deduplicated evidence, with explicit full-game tie, participation and streak interruption rules. |
+| Profile and friendship | Chosen display names, up to three earned featured badges, strongest opening, next uncompleted free rule and separate Original Rules collection. Private friend codes support request, acceptance, decline, revoke, unfriend, block/unblock and code replacement. No Google-email directory. |
+| Verified sharing | Explicit selected completed records produce a revocable public page and real 1200×630 PNG. Native file/link sharing, Copy link and Save image have supported/fallback paths. Positive public projection excludes account IDs, emails, seat credentials, hidden live hands and future cards. Random-hand copy says “Beat my record”. Images are requested on demand. |
+| Compact results highlight | An owner-specific `completedRecord` contains only permitted end-of-hand fields. It is rendered inside the existing results/reveal gate; it does not expose live readiness or introduce a new table overlay. |
+
+Primary tests: [`records-engine.test.ts`](../tests/records-engine.test.ts), [`records-api.test.ts`](../tests/records-api.test.ts), [`records-room-api.test.ts`](../tests/records-room-api.test.ts), and the profile/share/friend portions of [`gamification-ui.mjs`](../tests/gamification-ui.mjs).
+
+## Release 2: direct challenges
+
+Players use `/competition`; a shared deal opens its focused `/challenge/[token]` landing with conditions, target and direct play action.
+
+| Approved scope | Implemented completion evidence |
+| --- | --- |
+| 29: Beat My Deal | Custom AI challenges fix rule, human/starting seats, hints and each AI strength. Only an eligible completed first attempt can create a public target. Multiple invitation aliases refer to one immutable deal and one scored account reservation. Revocation stops new access; an authenticated owner can resume an already reserved attempt by its exact attempt ID. |
+| Frozen reproducibility | `parkes-challenge-v1` preserves the baseline rules and AI. Scoped seeded randomness drives deck order, physical card IDs, replenishment and easy-AI choices without replacing global randomness. Matching choices reproduce the trajectory; different choices have their own deterministic trajectory. Unsupported versions fail closed. Seeds/cursors/future stock stay server-private. |
+| 30 and 32: Daily Parkes Deal and Weekly Best Five | One free published deal per Sydney date. The first scored attempt counts; practice cannot scout before the first attempt settles or replace its result. Weekly totals use the best five daily first attempts in Monday-to-Sunday Sydney weeks. Missing days contribute zero and equal totals share place. DST, midnight, year/week boundaries and late daily sharing are tested. |
+| 31: private clubs | Code invitation, explicit join request and owner approval; immediate private-access removal on leave/block; owner removal, code rotation, ownership transfer and deletion. Boards use chosen names and opaque membership IDs. Closed-week trophies are archived before consent-roster changes, retain tied winners, and survive a long absence before the next read. |
+| 33: Three-Deal Duel | Accepted friends explicitly agree before seeing three distinct fixed deals. Each account receives the same three setups; only original first attempts contribute. Totals settle after all three attempts; equal totals draw. An accepted duel cannot be revoked to erase a result. |
+| 34: rematch invitation | A verified completed hand played by both accepted friends supplies the invitation. Explicit acceptance creates one ordinary two-human private lobby, recoverable by both accounts. Duplicate acceptance cannot create extra tables. No automatic message is sent. |
+| 35–36: rule week and club goals | A shared rule-of-week challenge rotates through all 30 free requirements. Club goals count ten distinct completed opening rules during the Sydney week and show individual contributions. Attempts must start after club membership consent. |
+| Reservation, access and interruptions | Atomic room/membership/deal-evidence reservation, durable resume, no duplicate scored attempts, ownership binding against recycled room codes, explicit withdrawal, fixed expiry and confirmed-service-error treatment. Original Rules invitations grant only an entitled host’s exact challenge; existing granted seats survive later entitlement expiry, while new attempts still require a valid grant. |
+
+Defaults are explained in [the player guide](../app/progress-help/page.tsx) and exported policy constants. Ordering is complete opening → earlier own opening turn → going out → fewer closing turns → lower leftover penalty. Integer points preserve that ordering within a deal; withdrawals score −1 and confirmed service interruptions are excluded. Daily attempts finish by 02:00 the following Sydney day; other controlled attempts have seven days. No paid retries exist.
+
+Primary tests: [`competition.test.ts`](../tests/competition.test.ts), [`competition-api.test.ts`](../tests/competition-api.test.ts), room integration, and [`gamification-competition-ui.mjs`](../tests/gamification-competition-ui.mjs). **The complete extended run passes, including all six duel attempts, a tied result, private club boards and rematch acceptance.**
+
+## Release 3: review and deeper competition
+
+| Approved scope | Implemented completion evidence |
+| --- | --- |
+| Detailed post-hand review | Owner-only completed-hand timeline includes deal, pickups, readiness, first legal combination, actual opening, layoffs/discards and end penalties. Available and played opening cards, closing turns and leftover points are shown. Wording describes the decision neutrally. |
+| 37: enhanced friends’ Rule Records | Basic accepted-friend comparisons extend to private club best-opening boards grouped by complete rule and conditions. Best turns, opening success and pending samples are displayed; equally early turns share rank. |
+| 38: weekly standings and trophy history | Current-week standings are provisional. Fixed daily deals and best-five totals produce shared ranks and immutable closed-week trophy awards, including when winners leave after the cutoff before the board is first opened. |
+| 39: rule consistency | Rate first, then median own opening turn, within exact rule/version/format/deal/relative-seat/player/AI/hints/timer cohorts. All eligible dealt attempts include pending and withdrawn hands in the denominator. The configurable initial threshold is 20; smaller samples are provisional and equal metrics tie. |
+| 40: controlled human ladder | `/ladder` offers accepted-friend invites and a willing-player queue. Both signed-in humans consent to full Game 1, hints off, 90-second turns and no AI. Ordinary social games stay unranked. Elo starts at 1000 with K=32; the first ten rated games are provisional; tied full-game lowest totals score 0.5. At most two same-pair meetings rate per Sydney day. |
+| Ranked persistence and disconnects | Final authoritative game state, evidence and rating settle atomically with unique game ownership and row locking. Own forfeit is explicit and idempotent. An absence claim needs five minutes of opponent absence plus five minutes of continuous claimant presence; both disconnecting causes no automatic loss. Only the verified Google owner can void a confirmed service fault. Account deletion closes the opponent’s active ranked game without a guessed penalty or rating change. |
+
+Primary tests: [`ladder-api.test.ts`](../tests/ladder-api.test.ts), pure competition/rating tests, records engine/service tests and the controlled-room API tests.
+
+## Verification record
+
+| Evidence | Known result at this audit checkpoint |
+| --- | --- |
+| Records engine / recorded-room integration | 22 / 11 tests passed, reported by their implementation owner. Covers exact partitions, first-turn/discard edge cases, neutral milestones, badges, denominator/streak rules, preview exclusion, identity and completed-record redaction. |
+| Records persistence/API | 17 tests pass, covering consent, owned evidence, CAS rollback, live privacy, valid PNG, revocation, pagination, limits and deletion. |
+| Frozen competition / competition SQL/API / ranked SQL/API | 19 / 23 / 19 tests passed. Real isolated PGlite covers uniqueness, concurrent reservations/acceptance, rollback, entitlement/revocation/resume, consent, deadlines, trophy retention, ties, forfeit and farming. |
+| Main local gamification browser run | `gamification-results/checks.json` records 14 grouped passes and zero browser/API errors, including profile, all 40 examples, sharing/PNG, friend acceptance, daily and custom deals, revoked-link resumption, private club approval/boards, six duel attempts, real shared-hand rematch, ladder forfeit, responsive layouts and sign-out. |
+| Existing browser regressions | Nine unchanged suites have passing isolated runs: reveal/session, table refinement, mobile usability, home/footer, tutorial, responsive tutorial, install, activity and browser security. An inherited phone score-width wrap was fixed; reveal/table/mobile passed again. This validates the tested checkpoint and fix, not later source or production. |
+| Authenticated result highlight | `records-result-ui.mjs` passes at 1440/390/360/320px with actual engine-earned evidence through the authenticated final-discard handler: no highlight before the full reveal, all ten opponent cards visible, stable rail, correct owned review link, no automatic sharing and guest/outsider rejection. |
+| Typecheck, build and CI | Repeated current production builds and typechecks passed. Final exact feature-head CI remains a release gate. |
+| Performance | Readiness/action evidence is saved in [`gamification-engine-benchmark.json`](gamification-engine-benchmark.json): 1,200 readiness checks, median 0.211 ms, p95 2.369 ms; recorded draw medians 0.350/0.406/0.575 ms for 2/4/8 players. The unmodified script is [`benchmark-records.ts`](../scripts/benchmark-records.ts). Populated service results are recorded in [`gamification-service-benchmark.json`](gamification-service-benchmark.json): local warm profile p95 28 ms, cold profile 68 ms, 50-member/10,000-hand club detail 939 ms, daily/weekly dashboard 18 ms. These PGlite figures exclude production network, pool contention and serverless cold starts. |
+
+## Meaningful limits and release gates
+
+- **History starts with validated collection.** Only authenticated memberships at a newly observed deal earn evidence. Legacy active hands are not backfilled; later deals can begin collection, with partially observed full games excluded from full-game achievements. Tutorial, debug/test and practice play earns no normal competitive credit.
+- **Reviews are bounded evidence.** They preserve the deal, latest 119 timeline entries and separate verified milestones, rather than every old action or a future deck. Long-hand trimming is disclosed. Earliest readiness is not a strategic recommendation.
+- **Public sharing is deliberate and revocable.** Record links expire after one year; revocation/deletion stops subsequent requests. Previously downloaded images cannot be recalled. Personal evidence/collections persist until account deletion; new relationships, attempts and public links have deletion cleanup.
+- **Headless sharing has a defined limit.** Automation verifies the real generated file, native Web Share arguments, Copy link and downloaded PNG. It does not operate an actual device’s OS share sheet or choose a social recipient.
+- **Tests stay isolated.** Browser tests use synthetic accounts and in-memory PostgreSQL behind local real handlers. Test cookies, fixtures, benchmarks and recovery tools must not become production routes. Production-only guards prevent preview collection and controlled-competition writes against a shared database; existing tracked rooms cannot be mutated by a preview client.
+- **Preservation remains a release gate.** Existing game rules/progression, Quick Play, purchases, Google/guest seat recovery, owner-dashboard access, voice lifecycle, mobile gestures, Sort, stable home tabs and winning reveal are covered by retained suites. Complete source, migration, CI and screenshot evidence must be saved at the release head.
+- **Production is pending exact confirmation.** Before saying any release is live, record the actual `parkes-rummy` Netlify production deployment ID, published/ready state and full commit SHA, confirm it matches the approved merged source, and check the production entry points. A successful local build, feature commit or deploy preview is not that confirmation.

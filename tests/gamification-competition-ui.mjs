@@ -9,7 +9,7 @@ import { ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from '../lib/room-code.ts';
 // and authenticated browser contexts. It never opens a database or a session.
 export async function runCompetitionUi({
   page, otherPage, outsiderPage, base, competition, records, rooms, db,
-  owner, friend, friendship, finishChallenge, output,
+  owner, friend, friendship, finishChallenge, output, readMutation,
 }) {
   await mkdir(output, { recursive: true });
   const checks = [];
@@ -31,9 +31,13 @@ export async function runCompetitionUi({
       const request = response.request();
       if (new URL(response.url()).pathname !== '/api/competition' || request.method() !== 'POST') return false;
       try { return request.postDataJSON()?.action === name; } catch { return false; }
-    }).then(async response => ({ response, data: await response.json() }));
+    });
     await click();
-    const { response, data } = await pending;
+    const response = await pending;
+    // Hard table navigation can discard Chrome's response-body handle. The
+    // HTTP harness captures the exact handler JSON before sending those bytes.
+    const captured = readMutation(target, name), data = captured.data;
+    assert.equal(captured.status, response.status());
     assert.ok(response.ok(), `${stage}: ${name} returned ${response.status()} ${JSON.stringify(data)}`);
     return data;
   }
