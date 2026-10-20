@@ -2,6 +2,9 @@
 -- Additive and repeatable provisioning, including Gamification Releases 1, 2 and 3.
 DO $$
 BEGIN
+-- All three releases share this namespace to coordinate cold workers.
+-- The lock releases automatically when this query's transaction ends.
+PERFORM pg_advisory_xact_lock(1346458187,1);
 CREATE TABLE IF NOT EXISTS "user" (
   "id" text PRIMARY KEY, "name" text NOT NULL, "email" text NOT NULL UNIQUE,
   "emailVerified" boolean NOT NULL DEFAULT false, "image" text,

@@ -1,6 +1,9 @@
 -- Parkes Rummy records, chosen names, friendships and revocable shares.
 -- Additive and repeatable; room deletion never deletes earned evidence.
 DO $$ BEGIN
+-- All three releases share this namespace to coordinate cold workers.
+-- The lock releases automatically when this query's transaction ends.
+PERFORM pg_advisory_xact_lock(1346458187,1);
 CREATE TABLE IF NOT EXISTS records_profiles (
  user_id text PRIMARY KEY REFERENCES "user"("id") ON DELETE CASCADE,
  display_name text NOT NULL DEFAULT 'Player', friend_code text NOT NULL UNIQUE,

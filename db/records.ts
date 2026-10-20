@@ -8,6 +8,9 @@ import type { Suit } from '../lib/types';
 
 /** Additive migration only. Evidence deliberately has no rooms foreign key. */
 export const RECORDS_SCHEMA = `DO $$ BEGIN
+-- All three releases share this namespace to coordinate cold workers.
+-- The lock releases automatically when this query's transaction ends.
+PERFORM pg_advisory_xact_lock(1346458187,1);
 CREATE TABLE IF NOT EXISTS records_profiles (
  user_id text PRIMARY KEY REFERENCES "user"("id") ON DELETE CASCADE,
  display_name text NOT NULL DEFAULT 'Player', friend_code text NOT NULL UNIQUE,
