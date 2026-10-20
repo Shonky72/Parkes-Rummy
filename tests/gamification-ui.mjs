@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { createServer } from 'node:net';
+import { createServer as createPortServer } from 'node:net';
+import { createServer as createHttpServer } from 'node:http';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { PGlite } from '@electric-sql/pglite';
@@ -20,6 +21,7 @@ import { ROOM_PROTOCOL, ROOM_PROTOCOL_HEADER } from '../lib/room-protocol.ts';
 import { RECORDS_ENGINE_VERSION } from '../lib/records-types.ts';
 import { getRuleExample, findBotOpening } from '../lib/rummy.ts';
 import { applyChallengeAction } from '../lib/challenge-engine/v1/index.ts';
+import { runCompetitionUi } from './gamification-competition-ui.mjs';
 
 // Production Next pages, real service handlers, SQL constraints and transactions.
 // Only the Google session boundary and wall-clock rate limiter are substituted.
@@ -70,17 +72,17 @@ const selectedRecord = await saveSample(owner, sampleEvidence('owner-seat'));
 await saveSample(friend, sampleEvidence('friend-seat'));
 await saveSample(owner, sampleEvidence('pending-seat', { status: 'started', finishedAt: null, completed: false, actualOpening: null, firstLegal: null, achievements: [], penalty: null }));
 
-const port = await new Promise(resolve => { const server = createServer(); server.listen(0, '127.0.0.1', () => { const port = server.address().port; server.close(() => resolve(port)); }); });
-const base = process.env.GAMIFICATION_TEST_BASE_URL || `http://127.0.0.1:${port}`;
+const port = await new Promise(resolve => { const server = createPortServer(); server.listen(0, '127.0.0.1', () => { const port = server.address().port; server.close(() => resolve(port)); }); });
+const nextBase = process.env.GAMIFICATION_TEST_BASE_URL || `http://127.0.0.1:${port}`;
+let base;
 const server = process.env.GAMIFICATION_TEST_BASE_URL ? null : spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '--hostname', '127.0.0.1', '-p', String(port)], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, NEXT_TELEMETRY_DISABLED: '1' } });
 let serverLog = ''; server?.stdout.on('data', data => { serverLog += data; }); server?.stderr.on('data', data => { serverLog += data; });
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 let browser, lastPage;
-const checks = [], errors = [];
+const checks = [], errors = [], downloadDiagnostics = [];
+let failure;
 function pass(name) { checks.push(name); console.log(`PASS: ${name}`); }
-async function contextFor(user, options = {}) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce', ...options });
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+function isolatedApi(user) {
   const session = { user };
   const resolveSession = async () => session.user;
   const recordApi = createRecordsHandlers({ records, resolveSession, security });
@@ -89,31 +91,17 @@ async function contextFor(user, options = {}) {
   const roomApi = createRoomHandlers({ repository: rooms, resolveSession, security, captureRecords: true, configured: () => true,
     joins: new PostgresJoinRequests(db), profile: styles, entitlements: async () => entitlements,
     rankedAccess: (room, userId, action) => ladder.assertAccess(room, userId, action), rankedHeartbeat: (room, userId) => room.ranked ? ladder.heartbeat(userId, room.ranked.matchId) : Promise.resolve() });
-  await context.addInitScript(() => {
-    localStorage.setItem('parkes-rummy:advertising-consent-v1', 'declined');
-    // The native system sheet cannot be displayed by headless Chrome. Capture its
-    // real Web Share arguments; file contents and download fallback are checked.
-    window.sharedRecords = [];
-    Object.defineProperty(navigator, 'canShare', { configurable: true, value: data => Array.isArray(data.files) });
-    Object.defineProperty(navigator, 'share', { configurable: true, value: async data => { window.sharedRecords.push({ title: data.title, url: data.url, fileName: data.files?.[0]?.name, bytes: data.files?.[0]?.size }); } });
-  });
-  context.on('page', page => { page.on('pageerror', error => errors.push(error.message)); });
-  await context.route('**/*', async route => {
-    const original = route.request(), url = new URL(original.url());
-    if (url.origin !== new URL(base).origin) return route.abort();
+  return { session, async handle(request) {
+    const url = new URL(request.url);
     const path = url.pathname;
-    if (!path.startsWith('/api/') && !path.startsWith('/records/shared/')) return route.continue();
-    const headers = await original.allHeaders();
-    headers['x-nf-client-connection-ip'] = '192.0.2.80';
-    const request = new Request(original.url(), { method: original.method(), headers, ...(original.postData() ? { body: original.postData() } : {}) });
     const json = (data, status = 200) => Response.json(data, { status, headers: { [ROOM_PROTOCOL_HEADER]: ROOM_PROTOCOL } });
     let response;
     if (path === '/api/account/session') response = json({ configured: true, user: session.user, entitlements, profile: await styles(), accessAdmin: false });
     else if (path === '/api/auth/sign-out') { session.user = null; response = json({ success: true }); }
     else if (path === '/api/activity/presence') response = new Response(null, { status: 204 });
-    else if (path === '/api/records') response = await (original.method() === 'POST' ? recordApi.mutate(request) : recordApi.snapshot(request));
-    else if (path === '/api/competition') response = await (original.method() === 'POST' ? competitionApi.mutate(request) : competitionApi.snapshot(request));
-    else if (path === '/api/ladder') response = await (original.method() === 'POST' ? ladderApi.mutate(request) : ladderApi.snapshot(request));
+    else if (path === '/api/records') response = await (request.method === 'POST' ? recordApi.mutate(request) : recordApi.snapshot(request));
+    else if (path === '/api/competition') response = await (request.method === 'POST' ? competitionApi.mutate(request) : competitionApi.snapshot(request));
+    else if (path === '/api/ladder') response = await (request.method === 'POST' ? ladderApi.mutate(request) : ladderApi.snapshot(request));
     else if (path.startsWith('/api/competition/challenge/')) response = await competitionApi.challenge(request, path.split('/').at(-1));
     else if (path.startsWith('/api/records/share/') || path.startsWith('/records/shared/')) {
       const token = path.startsWith('/records/shared/') ? path.split('/').at(-1) : path.split('/')[4];
@@ -130,13 +118,74 @@ async function contextFor(user, options = {}) {
       else if (action === 'join-requests') response = json({ requests: [] });
       else response = await roomApi.readRoomRequest(request, code);
     } else response = json({ error: `Unexpected isolated test endpoint ${path}` }, 404);
-    await route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers.entries()), body: Buffer.from(await response.arrayBuffer()) });
+    return response;
+  } };
+}
+
+// Chrome starts <a download> requests outside Playwright route interception.
+// Serve the actual isolated handlers over HTTP so fetches and saved images use
+// exactly the same database and authorization rules. The test-only session
+// cookie exists solely in this local harness, never in application source.
+const sessions = new Map(), anonymousApi = isolatedApi(null);
+const apiErrors = [];
+const proxy = createHttpServer(async (incoming, outgoing) => {
+  try {
+    const url = new URL(incoming.url, base);
+    let response;
+    if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/records/shared/')) {
+      const cookie = incoming.headers.cookie?.split(';').map(value => value.trim()).find(value => value.startsWith('parkes_ui_session='))?.slice('parkes_ui_session='.length);
+      const api = sessions.get(cookie) ?? anonymousApi;
+      const chunks = []; for await (const chunk of incoming) chunks.push(chunk);
+      const headers = new Headers();
+      for (const [key, value] of Object.entries(incoming.headers)) if (value !== undefined) headers.set(key, Array.isArray(value) ? value.join(', ') : value);
+      headers.set('x-nf-client-connection-ip', '192.0.2.80');
+      const request = new Request(url, { method: incoming.method, headers, ...(!['GET', 'HEAD'].includes(incoming.method) ? { body: Buffer.concat(chunks) } : {}) });
+      response = await api.handle(request);
+    } else {
+      const headers = { ...incoming.headers }; delete headers.host; delete headers.connection; delete headers['accept-encoding'];
+      response = await fetch(new URL(incoming.url, nextBase), { headers, redirect: 'manual' });
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    outgoing.statusCode = response.status;
+    for (const [key, value] of response.headers) if (!['content-encoding', 'content-length', 'transfer-encoding', 'connection', 'set-cookie'].includes(key)) outgoing.setHeader(key, value);
+    const cookies = response.headers.getSetCookie(); if (cookies.length) outgoing.setHeader('set-cookie', cookies);
+    outgoing.setHeader('content-length', bytes.length); outgoing.end(incoming.method === 'HEAD' ? undefined : bytes);
+  } catch (error) {
+    apiErrors.push(String(error)); outgoing.statusCode = 503; outgoing.end('Isolated acceptance service unavailable.');
+  }
+});
+await new Promise(resolve => proxy.listen(0, '127.0.0.1', resolve));
+base = `http://127.0.0.1:${proxy.address().port}`;
+
+async function contextFor(user, options = {}) {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce', ...options });
+  context.on('requestfailed', request => { if (request.url().includes('/share/')) downloadDiagnostics.push({ url: request.url(), failed: request.failure() }); });
+  context.on('response', response => { if (response.url().includes('/share/')) downloadDiagnostics.push({ url: response.url(), status: response.status() }); });
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const api = isolatedApi(user), session = api.session, sessionId = crypto.randomUUID();
+  sessions.set(sessionId, api);
+  await context.addCookies([{ name: 'parkes_ui_session', value: sessionId, url: base, httpOnly: true, sameSite: 'Lax' }]);
+  await context.addInitScript(() => {
+    try { localStorage.setItem('parkes-rummy:advertising-consent-v1', 'declined'); } catch { /* Opaque browser download frames have no storage. */ }
+    // The native system sheet cannot be displayed by headless Chrome. Capture its
+    // real Web Share arguments; file contents and download fallback are checked.
+    window.sharedRecords = [];
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: data => Array.isArray(data.files) });
+    Object.defineProperty(navigator, 'share', { configurable: true, value: async data => { window.sharedRecords.push({ title: data.title, url: data.url, fileName: data.files?.[0]?.name, bytes: data.files?.[0]?.size }); } });
   });
+  context.on('page', page => { page.on('pageerror', error => errors.push(error.message)); });
+  await context.route('**/*', route => new URL(route.request().url()).origin === new URL(base).origin ? route.continue() : route.abort());
   return { context, session, page: await context.newPage() };
 }
+
 async function noOverflow(page, name) {
   const overflow = await page.evaluate(() => ({ page: document.documentElement.scrollWidth, viewport: innerWidth }));
   assert.ok(overflow.page <= overflow.viewport + 1, `${name}: horizontal page overflow ${JSON.stringify(overflow)}`);
+  const clipped = await page.evaluate(() => Array.from(document.querySelectorAll('.progress-section, .record-review, .progress-main button, .progress-app a.button, .competition-week')).filter(element => {
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && (rect.left < -1 || rect.right > innerWidth + 1);
+  }).map(element => ({ element: element.className, label: element.textContent?.slice(0, 80), left: element.getBoundingClientRect().left, right: element.getBoundingClientRect().right })));
+  assert.deepEqual(clipped, [], `${name}: clipped panel or control`);
 }
 async function finishChallenge(code) {
   for (let count = 0; count < 2500; count++) {
@@ -158,7 +207,7 @@ async function finishChallenge(code) {
 
 try {
   let ready = false;
-  for (let count = 0; count < 100; count++) { try { ready = (await fetch(base)).ok; } catch {} if (ready) break; await pause(200); }
+  for (let count = 0; count < 100; count++) { try { ready = (await fetch(nextBase)).ok; } catch {} if (ready) break; await pause(200); }
   assert.ok(ready, `Next production server failed to start: ${serverLog}`);
   browser = await chromium.launch({ headless: true });
   const anonymous = await contextFor(null);
@@ -201,6 +250,7 @@ try {
   await page.getByText('Detailed hand timeline', { exact: true }).click();
   await page.getByText('Opening available on Turn 2.', { exact: true }).waitFor();
   assert.equal(await page.locator('.record-review').count(), 1);
+  assert.equal(await page.locator('.record-review').getByText('Turns from opening to going out', { exact: true }).locator('..').locator('dd').innerText(), '2');
   await page.locator('.record-review').getByRole('button', { name: 'Share', exact: true }).click();
   const sharePanel = page.getByRole('region', { name: 'Share selected record' });
   await sharePanel.waitFor();
@@ -214,12 +264,19 @@ try {
   assert.ok(copied.endsWith(selectedShare.url));
   const downloadEvent = page.waitForEvent('download');
   await sharePanel.getByRole('link', { name: 'Save image', exact: true }).click();
-  const download = await downloadEvent; await download.saveAs(`${output}/verified-record.png`);
+  const download = await downloadEvent;
+  const downloadFailure = await download.failure();
+  if (downloadFailure) {
+    const debugImage = await page.evaluate(async url => { const r = await fetch(url); return { status:r.status, headers:Object.fromEntries(r.headers), bytes:(await r.arrayBuffer()).byteLength }; }, selectedShare.imageUrl);
+    throw new Error(`Download ${download.url()} failed: ${downloadFailure}; direct image: ${JSON.stringify(debugImage)}; browser: ${JSON.stringify(downloadDiagnostics)}`);
+  }
+  await download.saveAs(`${output}/verified-record.png`);
   const png = await readFile(`${output}/verified-record.png`);
   assert.equal(png.toString('hex', 0, 8), '89504e470d0a1a0a'); assert.equal(png.readUInt32BE(16), 1200); assert.equal(png.readUInt32BE(20), 630);
   await outsider.page.goto(`${base}${selectedShare.url}`);
   await outsider.page.getByRole('heading', { name: 'Beat my record', exact: true }).waitFor();
   const sharedText = await outsider.page.textContent('body');
+  assert.match(sharedText, /AI: easy/); assert.match(sharedText, /No turn timer/); assert.match(sharedText, /Turn order 1\/2/); assert.ok(sharedText.includes(RECORDS_ENGINE_VERSION));
   assert.ok(!sharedText.includes(owner.email)); assert.ok(!sharedText.includes(owner.id)); assert.ok(!sharedText.includes('Private seat name'));
   await outsider.page.screenshot({ path: `${output}/public-record-desktop.png`, fullPage: true });
   await sharePanel.getByRole('button', { name: 'Revoke this public link' }).click();
@@ -241,7 +298,7 @@ try {
   pass('Friend code request, recipient acceptance and comparable record access work across two isolated account sessions');
 
   // Controlled deal entry goes through its focused page and the real atomic
-  // reservation API. The first two human actions use the actual card table.
+  // reservation API. The human draw uses the actual card table.
   const calendar = await competition.snapshot(owner.id);
   await page.goto(`${base}${calendar.daily.publicUrl}`);
   await page.getByRole('button', { name: /Play this challenge|Start first scored attempt/ }).click();
@@ -266,6 +323,8 @@ try {
   assert.equal(practice.attempt.practice, true); assert.notEqual(practice.roomCode, code);
   assert.equal((await rooms.load(practice.roomCode)).room.records.eligible, false);
   pass('Focused daily landing starts a real frozen game; draw persists; simultaneous reconnects reuse the first attempt; practice earns no records');
+
+  checks.push(...await runCompetitionUi({ page, otherPage: other.page, outsiderPage: outsider.page, base, competition, records, rooms, db, owner, friend, friendship, finishChallenge, output }));
 
   // Ranked invitations remain opt-in for each player, then create a real locked
   // two-human table. The explicit forfeit flow settles its rating transaction.
@@ -309,19 +368,21 @@ try {
 
   // Sign-out revokes the in-memory private view before another session can use it.
   await page.goto(`${base}/`);
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.getByRole('button', { name: /^Sign out / }).click();
   await page.goto(`${base}/profile`);
   await page.getByRole('heading', { name: 'Your records, your progress' }).waitFor();
   assert.ok(!(await page.textContent('body')).includes('River Gum’s profile'));
   assert.deepEqual(errors, []);
+  assert.deepEqual(apiErrors, []);
   pass('Account sign-out clears private progress and every exercised page has no browser runtime errors');
   await own.context.close(); await other.context.close(); await outsider.context.close();
 } catch (error) {
+  failure = String(error);
   try { await lastPage?.screenshot({ path: `${output}/failure.png`, fullPage: true }); } catch {}
   await writeFile(`${output}/checks.json`, JSON.stringify({ checks, errors, failure: String(error) }, null, 2));
   throw error;
 } finally {
   await writeFile(`${output}/next.log`, serverLog);
-  await writeFile(`${output}/checks.json`, JSON.stringify({ checks, errors }, null, 2));
-  await browser?.close(); server?.kill('SIGTERM'); await pg.close();
+  await writeFile(`${output}/checks.json`, JSON.stringify({ checks, errors, ...(failure ? { failure, downloadDiagnostics } : {}) }, null, 2));
+  await browser?.close(); server?.kill('SIGTERM'); await new Promise(resolve => proxy.close(resolve)); await pg.close();
 }

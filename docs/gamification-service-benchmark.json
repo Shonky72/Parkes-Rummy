@@ -1,0 +1,80 @@
+{
+  "runtime": "v24.19.0",
+  "engine": "parkes-challenge-v1",
+  "database": "PGlite in-memory PostgreSQL; no network latency",
+  "dataset": {
+    "accounts": 51,
+    "clubMembers": 50,
+    "handsPerAccount": 200,
+    "evidenceRows": 10200,
+    "evidenceJsonBytes": 64774954,
+    "weeklyResults": 357
+  },
+  "measurements": [
+    {
+      "name": "profile API warm summary (200 lifetime hands)",
+      "samples": 12,
+      "p50Ms": 24.391,
+      "p95Ms": 27.962,
+      "maxMs": 27.962,
+      "sqlQueries": {
+        "min": 11,
+        "max": 11
+      },
+      "databaseRows": {
+        "min": 32,
+        "max": 32
+      },
+      "responseBytes": 892426
+    },
+    {
+      "name": "profile API cold repository (200 lifetime hands)",
+      "samples": 12,
+      "p50Ms": 52.376,
+      "p95Ms": 67.774,
+      "maxMs": 67.774,
+      "sqlQueries": {
+        "min": 13,
+        "max": 13
+      },
+      "databaseRows": {
+        "min": 232,
+        "max": 232
+      },
+      "responseBytes": 892426
+    },
+    {
+      "name": "private club detail (50 members, 10000 lifetime hands, 350 weekly attempts)",
+      "samples": 20,
+      "p50Ms": 719.604,
+      "p95Ms": 938.764,
+      "maxMs": 938.764,
+      "sqlQueries": {
+        "min": 20,
+        "max": 20
+      },
+      "databaseRows": {
+        "min": 10506,
+        "max": 10506
+      },
+      "responseBytes": 2154038
+    },
+    {
+      "name": "daily and weekly account dashboard (7 daily results, no club)",
+      "samples": 20,
+      "p50Ms": 11.283,
+      "p95Ms": 18.414,
+      "maxMs": 18.414,
+      "sqlQueries": {
+        "min": 18,
+        "max": 18
+      },
+      "databaseRows": {
+        "min": 18,
+        "max": 18
+      },
+      "responseBytes": 7954
+    }
+  ],
+  "limits": "Local p50/p95 measures parsing, SQL execution and response assembly. It is not a production network, pool saturation or serverless cold-start estimate."
+}

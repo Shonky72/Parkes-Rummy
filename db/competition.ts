@@ -4,7 +4,7 @@ import { SecurityError } from './security';
 import { getEntitlements, getPlayerProfile } from './entitlements';
 import { RecordsRepository, recordsRepository, publicConditions } from './records';
 import { PostgresRoomRepository } from './room-repository';
-import { createChallengeRoom, publicChallengeRoom, validateChallengeConfig, challengeVersionSupported, frozenChallengeRule } from '../lib/challenge-engine/v1';
+import { createChallengeRoom, publicChallengeRoom, validateChallengeConfig, challengeVersionSupported, frozenChallengeRule, isChallengeRoom } from '../lib/challenge-engine/v1';
 import { createPlayer, createRoom, applyAction, RULES, publicRoom } from '../lib/rummy';
 import { ROOM_CODE_ALPHABET } from '../lib/room-code';
 import { CHALLENGE_ENGINE_VERSION, type ChallengeConfig, type ChallengeScore, type DailyChallengeResult } from '../lib/competition-types';
@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS competition_attempts (
  user_id text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
  room_code text NOT NULL UNIQUE, player_id text NOT NULL, hand_id text NOT NULL,
  scored boolean NOT NULL, status text NOT NULL CHECK(status IN ('active','completed','abandoned','service-interrupted')),
- score jsonb, daily_day text, created_at bigint NOT NULL, deadline_at bigint NOT NULL, finished_at bigint);
+ score jsonb, daily_day text, source_token text, created_at bigint NOT NULL, deadline_at bigint NOT NULL, finished_at bigint);
+ALTER TABLE competition_attempts ADD COLUMN IF NOT EXISTS source_token text;
 CREATE UNIQUE INDEX IF NOT EXISTS competition_first_attempt ON competition_attempts(challenge_id,user_id) WHERE scored=true;
 CREATE UNIQUE INDEX IF NOT EXISTS competition_active_practice ON competition_attempts(challenge_id,user_id) WHERE scored=false AND status='active';
 CREATE INDEX IF NOT EXISTS competition_attempt_owner ON competition_attempts(user_id,created_at DESC);
@@ -72,7 +73,7 @@ END $$;`;
 
 type ChallengeKind='daily'|'rule-week'|'custom'|'duel';
 type ChallengeRow={id:string;owner_id:string|null;kind:ChallengeKind;day:string|null;week:string|null;config:ChallengeConfig;token:string;shared:boolean;revoked_at:string|number|null;target:ChallengeScore|null;created_at:string|number;invitationId?:string;baseKind?:ChallengeKind};
-type AttemptRow={id:string;challenge_id:string;user_id:string;room_code:string;player_id:string;hand_id:string;scored:boolean;status:'active'|'completed'|'abandoned'|'service-interrupted';score:ChallengeScore|null;created_at:string|number;deadline_at:string|number;finished_at:string|number|null};
+type AttemptRow={id:string;challenge_id:string;user_id:string;room_code:string;player_id:string;hand_id:string;scored:boolean;status:'active'|'completed'|'abandoned'|'service-interrupted';score:ChallengeScore|null;source_token?:string|null;created_at:string|number;deadline_at:string|number;finished_at:string|number|null};
 type ClubMember={id:string;club_id:string;user_id:string;role:'owner'|'member';status:'pending'|'member'|'blocked';joined_at:string|number|null;display_name?:string};
 type DuelRow={id:string;creator_id:string;opponent_id:string;friend_id:string;token:string;challenge_ids:[string,string,string];status:'pending'|'accepted'|'revoked';created_at:string|number};
 type RematchRow={id:string;creator_id:string;opponent_id:string;friend_id:string;token:string;source_hand_id:string;game:GameType;status:'pending'|'accepted'|'revoked';room_code:string|null;created_at:string|number};
@@ -100,6 +101,10 @@ function label(value:unknown,maximum=32):string {
   return result;
 }
 function clientDatabase(connection:SqlConnection):SqlDatabase {return {...connection,transaction:work=>work(connection)};}
+function ownsAttemptRoom(room:RoomState,attempt:AttemptRow):boolean {
+  return isChallengeRoom(room)&&room.challenge.attemptId===attempt.id&&room.challenge.config.id===attempt.challenge_id
+    &&room.challenge.humanPlayerId===attempt.player_id&&room.records?.handId===attempt.hand_id;
+}
 function endOfDailyGrace(day:string):number {return sydneyMidnight(shiftCalendarDay(day,1))+2*60*60*1000;}
 export const COMPETITION_SERVICE_POLICY={...COMPETITION_POLICY,
   deadlines:'Start a daily scored attempt on its Sydney date and finish before 02:00 the following day. Other attempts have a seven-day reconnect window. Expired attempts count as withdrawals.',
@@ -206,7 +211,7 @@ export class CompetitionRepository {
     return this.descriptor(row,userId);
   }
   private previewAttempt(row:AttemptRow,challenge:ChallengeRow):AttemptPreview {
-    return {id:row.id,challengeId:row.challenge_id,title:frozenChallengeRule(challenge.config).title,token:challenge.token,roomCode:row.room_code,handId:row.hand_id,
+    return {id:row.id,challengeId:row.challenge_id,title:frozenChallengeRule(challenge.config).title,token:row.source_token??challenge.token,roomCode:row.room_code,handId:row.hand_id,
       scored:row.scored,practice:!row.scored,status:row.status,score:row.score,points:row.score?challengePoints(row.score):null,createdAt:Number(row.created_at),deadlineAt:Number(row.deadline_at),finishedAt:row.finished_at===null?null:Number(row.finished_at)};
   }
   async settle(userIds:string[]):Promise<void> {
@@ -214,7 +219,7 @@ export class CompetitionRepository {
     const expired=await this.db.query<AttemptRow>("SELECT * FROM competition_attempts WHERE user_id=ANY($1::text[]) AND status='active' AND deadline_at<=$2 ORDER BY deadline_at LIMIT 100",[userIds,this.now()]);
     for(const attempt of expired.rows){
       const room=await this.rooms.load(attempt.room_code);
-      if(room&&room.room.status==='playing')await this.rooms.delete(attempt.room_code,room.version);
+      if(room&&ownsAttemptRoom(room.room,attempt)&&room.room.status==='playing')await this.rooms.delete(attempt.room_code,room.version);
     }
     const completed=await this.db.query<AttemptRow & {evidence:RecordEvidence}>(`SELECT a.*,e.payload AS evidence FROM competition_attempts a JOIN records_evidence e
       ON e.user_id=a.user_id AND e.hand_id=a.hand_id AND e.player_id=a.player_id AND e.room_code=a.room_code
@@ -228,7 +233,9 @@ export class CompetitionRepository {
     // Losing a room without its durable end record is a service failure, not a
     // permission to charge a guessed loss or issue another ranked first try.
     await this.db.query(`WITH lost AS (UPDATE competition_attempts a SET status='service-interrupted',finished_at=$2,score=$3::jsonb
-      WHERE a.user_id=ANY($1::text[]) AND a.status='active' AND NOT EXISTS(SELECT 1 FROM rooms r WHERE r.code=a.room_code)
+      WHERE a.user_id=ANY($1::text[]) AND a.status='active' AND NOT EXISTS(SELECT 1 FROM rooms r WHERE r.code=a.room_code
+        AND r.state::jsonb->'challenge'->>'attemptId'=a.id AND r.state::jsonb->'challenge'->'config'->>'id'=a.challenge_id
+        AND r.state::jsonb->'challenge'->>'humanPlayerId'=a.player_id AND r.state::jsonb->'records'->>'handId'=a.hand_id)
       AND NOT EXISTS(SELECT 1 FROM records_evidence e WHERE e.user_id=a.user_id AND e.hand_id=a.hand_id AND e.status<>'started')
       RETURNING id,user_id,hand_id,player_id,room_code), closed AS (
       UPDATE records_evidence e SET status='service-interrupted',updated_at=$2,
@@ -238,9 +245,24 @@ export class CompetitionRepository {
       RETURNING e.hand_id) SELECT id FROM lost`,
     [userIds,this.now(),JSON.stringify({completed:false,openingTurn:null,wentOut:false,closingTurns:null,penalty:0,outcome:'service-interrupted'})]);
   }
+  /** A reservation owns exactly one table. Link revocation and a later store
+   * entitlement change do not remove that already granted account-bound seat. */
+  async resumeAttempt(userId:string,attemptId:string) {
+    await this.ensure();await this.settle([userId]);
+    const row=(await this.db.query<AttemptRow & {challenge:ChallengeRow;room_state:string|null}>(`SELECT a.*,row_to_json(c) AS challenge,r.state AS room_state
+      FROM competition_attempts a JOIN competition_challenges c ON c.id=a.challenge_id LEFT JOIN rooms r ON r.code=a.room_code
+      WHERE a.id=$1 AND a.user_id=$2`,[attemptId,userId])).rows[0];
+    if(!row)fail('This saved attempt is not available.');
+    const room=row.room_state?JSON.parse(row.room_state) as RoomState:null;
+    return {roomCode:row.room_code,room:room&&row.status==='active'&&ownsAttemptRoom(room,row)?publicChallengeRoom(room,row.player_id):null,
+      attempt:this.previewAttempt(row,row.challenge),resumed:true};
+  }
   async reserveAttempt(userId:string,invitation:string,practice=false) {
     await this.ensure();await this.settle([userId]);
-    const selected=await this.challengeByToken(invitation,userId);await this.originalAccess(selected,userId);
+    const selected=await this.challengeByToken(invitation,userId);
+    // Resolve store access outside the reservation transaction. Existing seats
+    // return before enforcing this grant; creating a new room enforces it below.
+    const access=await this.originalAccess(selected,userId).then(()=>null,error=>error);
     const [profile,style]=await Promise.all([this.records.profile(userId),this.styles(userId)]);
     return this.db.transaction(async connection=>{
       await connection.query('SELECT id FROM competition_challenges WHERE id=$1 FOR UPDATE',[selected.id]);
@@ -249,9 +271,10 @@ export class CompetitionRepository {
       if(practice&&(!first||first.status==='active'))fail('Finish or withdraw from your first scored attempt before opening a practice replay.',409);
       const prior=practice?(await connection.query<AttemptRow>("SELECT * FROM competition_attempts WHERE challenge_id=$1 AND user_id=$2 AND scored=false AND status='active' FOR UPDATE",[challenge.id,userId])).rows[0]:first;
       if(prior){
-        const room=(await connection.query<{state:string}>('SELECT state FROM rooms WHERE code=$1',[prior.room_code])).rows[0];
-        return {roomCode:prior.room_code,room:room&&prior.status==='active'?publicChallengeRoom(JSON.parse(room.state) as RoomState,prior.player_id):null,attempt:this.previewAttempt(prior,challenge),resumed:true};
+        const saved=(await connection.query<{state:string}>('SELECT state FROM rooms WHERE code=$1',[prior.room_code])).rows[0],room=saved?JSON.parse(saved.state) as RoomState:null;
+        return {roomCode:prior.room_code,room:room&&prior.status==='active'&&ownsAttemptRoom(room,prior)?publicChallengeRoom(room,prior.player_id):null,attempt:this.previewAttempt(prior,challenge),resumed:true};
       }
+      if(access)throw access;
       if(!practice&&challenge.kind==='daily'&&challenge.day!==sydneyDayKey(this.now()))fail('This daily deal is closed. A completed first attempt is required before a practice replay.',409);
       const now=this.now(),dailyDay=(challenge.kind==='daily'||challenge.baseKind==='daily')&&challenge.day===sydneyDayKey(now)?challenge.day:null;
       const deadline=!practice&&dailyDay?endOfDailyGrace(dailyDay):now+7*86400000;
@@ -261,8 +284,8 @@ export class CompetitionRepository {
       for(let tries=0;tries<12;tries++){
         const room=createChallengeRoom(challenge.config,roomCode(),player,{practice,attemptId:id,now,deadlineAt:deadline});
         if(!await repo.insert(room,{userId,playerId:player.id}))continue;
-        const inserted=await connection.query<AttemptRow>(`INSERT INTO competition_attempts(id,challenge_id,user_id,room_code,player_id,hand_id,scored,status,created_at,deadline_at,daily_day)
-          VALUES($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,$10) RETURNING *`,[id,challenge.id,userId,room.code,player.id,room.records!.handId,!practice,now,deadline,practice?null:dailyDay]);
+        const inserted=await connection.query<AttemptRow>(`INSERT INTO competition_attempts(id,challenge_id,user_id,room_code,player_id,hand_id,scored,status,created_at,deadline_at,daily_day,source_token)
+          VALUES($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,$10,$11) RETURNING *`,[id,challenge.id,userId,room.code,player.id,room.records!.handId,!practice,now,deadline,practice?null:dailyDay,invitation]);
         return {roomCode:room.code,room:publicChallengeRoom(room,player.id),attempt:this.previewAttempt(inserted.rows[0],challenge),resumed:false};
       }
       fail('A new table was not available. Please try again.',503);
@@ -273,7 +296,7 @@ export class CompetitionRepository {
     if(!attempt)fail();
     if(attempt.status==='active'){
       const current=await this.rooms.load(attempt.room_code);
-      if(current&&!await this.rooms.delete(attempt.room_code,current.version))fail('Your hand changed. Refresh before withdrawing.',409);
+      if(current&&ownsAttemptRoom(current.room,attempt)&&!await this.rooms.delete(attempt.room_code,current.version))fail('Your hand changed. Refresh before withdrawing.',409);
       await this.settle([userId]);
     }
   }
@@ -397,20 +420,24 @@ export class CompetitionRepository {
       const current=(await client.query<ClubMember>("SELECT * FROM competition_memberships WHERE club_id=$1 AND status='member'",[clubId])).rows;
       await this.archiveClubWeeks(clubId,current,client,membershipChange);
     });
-    const now=this.now(),currentWeek=sydneyWeekKey(now),ids=members.map(m=>m.user_id),membershipIds=new Map(members.map(m=>[m.user_id,m.id])),joinedAt=new Map(members.map(m=>[m.user_id,Number(m.joined_at)]));
-    const results=await this.dailyResults(ids,undefined,connection);
+    const now=this.now(),currentWeek=sydneyWeekKey(now),ids=members.map(m=>m.user_id),joinedAt=new Map(members.map(m=>[m.user_id,Number(m.joined_at)]));
     if(membershipChange){
       const unsettled=await connection.query(`SELECT 1 FROM competition_attempts a JOIN competition_challenges c ON c.id=a.challenge_id
         WHERE a.user_id=ANY($1::text[]) AND a.status='active' AND a.scored=true AND a.daily_day=c.day AND c.week<$2
         AND a.deadline_at<=$3 LIMIT 1`,[ids,currentWeek,now]);
       if(unsettled.rows.length)fail('The previous week is settling. Refresh before changing club membership.',409);
     }
-    const weeks=[...new Set(results.map(r=>sydneyWeekKey(r.day)))].filter(week=>week<currentWeek&&sydneyMidnight(shiftCalendarDay(week,7))+2*3600000<=now).sort().slice(-12);
-    for(const week of weeks){
-      if((await connection.query('SELECT 1 FROM competition_club_weeks WHERE club_id=$1 AND week=$2',[clubId,week])).rows.length)continue;
-      const unsettled=await connection.query(`SELECT 1 FROM competition_attempts a JOIN competition_challenges c ON c.id=a.challenge_id WHERE a.user_id=ANY($1::text[]) AND a.status='active' AND a.scored=true AND a.daily_day=c.day AND c.week=$2 LIMIT 1`,[ids,week]);
-      if(unsettled.rows.length)continue;
-      const board=await this.standings(ids,week,membershipIds,joinedAt,connection),winners=board.filter(p=>p.rank===1&&p.attempts>p.abandoned);
+    const due=(await connection.query<{week:string;unsettled:boolean}>(`SELECT c.week,bool_or(a.status='active') AS unsettled
+      FROM competition_attempts a JOIN competition_challenges c ON c.id=a.challenge_id
+      JOIN competition_memberships m ON m.user_id=a.user_id AND m.club_id=$1 AND m.status='member' AND a.created_at>=m.joined_at
+      WHERE a.scored=true AND c.kind='daily' AND a.daily_day=c.day AND c.week<$2
+        AND NOT EXISTS(SELECT 1 FROM competition_club_weeks w WHERE w.club_id=$1 AND w.week=c.week)
+      GROUP BY c.week ORDER BY c.week`,[clubId,currentWeek])).rows;
+    for(const {week,unsettled} of due){
+      if(unsettled||sydneyMidnight(shiftCalendarDay(week,7))+2*3600000>now)continue;
+      const results=await this.dailyResults(ids,week,connection);
+      const board=rankWithTies(members.map(m=>({memberId:m.id,...weeklyBestFive(results.filter(r=>r.accountId===m.user_id&&r.reservedAt>=(joinedAt.get(m.user_id)??0)),week)})).filter(p=>p.attempts>0),(a,b)=>b.points-a.points);
+      const winners=board.filter(p=>p.rank===1&&p.attempts>p.abandoned);
       const publish=async(connection:SqlConnection)=>{
         const claimed=await connection.query('INSERT INTO competition_club_weeks(club_id,week,published_at) VALUES($1,$2,$3) ON CONFLICT DO NOTHING RETURNING club_id',[clubId,week,now]);
         if(!claimed.rows.length)return;
@@ -584,7 +611,10 @@ export class CompetitionRepository {
     const attemptRows=(await this.db.query<AttemptRow & {challenge:ChallengeRow}>(`SELECT a.*,row_to_json(c) AS challenge FROM competition_attempts a JOIN competition_challenges c ON c.id=a.challenge_id
       WHERE a.user_id=$1 ORDER BY a.created_at DESC LIMIT 60`,[userId])).rows;
     const memberships=(await this.db.query<ClubMember & {name:string}>('SELECT m.*,c.name FROM competition_memberships m JOIN competition_clubs c ON c.id=m.club_id WHERE m.user_id=$1 AND m.status<>\'blocked\' ORDER BY m.requested_at DESC',[userId])).rows;
-    const clubs=await Promise.all(memberships.map(m=>m.status==='member'?this.club(userId,m.club_id):Promise.resolve({id:m.club_id,name:m.name,role:m.role,status:m.status})));
+    // Club analytics are loaded only for the explicitly selected private club.
+    // Embedding every lifetime board makes otherwise small dashboard responses
+    // scale with all memberships and can exceed a serverless response limit.
+    const clubs=memberships.map(m=>({id:m.club_id,name:m.name,role:m.role,status:m.status}));
     const duelIds=(await this.db.query<{id:string}>("SELECT id FROM competition_duels WHERE (creator_id=$1 OR opponent_id=$1) AND status<>'revoked' ORDER BY created_at DESC LIMIT 30",[userId])).rows;
     const rematchIds=(await this.db.query<{id:string}>("SELECT id FROM competition_rematches WHERE (creator_id=$1 OR opponent_id=$1) AND status<>'revoked' ORDER BY created_at DESC LIMIT 30",[userId])).rows;
     const [dailyView,ruleWeekView,duels,rematches]=await Promise.all([this.descriptor(daily,userId),this.descriptor(ruleWeek,userId),Promise.all(duelIds.map(r=>this.duel(userId,r.id))),Promise.all(rematchIds.map(r=>this.rematch(userId,r.id)))]);

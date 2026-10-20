@@ -86,7 +86,7 @@ export interface SharedRecord {
   displayName: string; headline: 'Beat my record'; ruleId: string; ruleName: string; ruleDescription: string;
   game: number; ruleNumber: number; openingTurn: number; firstLegalTurn: number | null;
   opportunitiesPassed: number; penalty: number; wentOut: boolean; finishedAt: number;
-  conditions: { engineVersion: string; format: string; deal: string; playerCount: number; humanCount: number; seat: number; ai: string[]; hints: boolean; timerSeconds: number };
+  conditions: { engineVersion: string; format: string; deal: string; playerCount: number; humanCount: number; seat: number; startingSeat: number; turnOrderSeat: number; ai: string[]; hints: boolean; timerSeconds: number };
   opening: { kind: string; cards: { rank: number; suit: Suit; asRank?: number; asSuit?: Suit }[] }[];
   badges: string[];
 }
@@ -96,7 +96,8 @@ const publicShare = (row: {id:string; hand_id:string; token:string; created_at:s
   imageUrl: `/api/records/share/${row.token}/image`, createdAt: Number(row.created_at), expiresAt: Number(row.expires_at),
 });
 export function publicConditions(c: RecordConditions): SharedRecord['conditions'] {
-  return {engineVersion:c.engineVersion,format:c.format,deal:c.deal,playerCount:c.playerCount,humanCount:c.humanCount,seat:c.seat,
+  const startingSeat=c.startingSeat??0;
+  return {engineVersion:c.engineVersion,format:c.format,deal:c.deal,playerCount:c.playerCount,humanCount:c.humanCount,seat:c.seat,startingSeat,turnOrderSeat:(c.seat-startingSeat+c.playerCount)%c.playerCount,
     ai:c.roster.filter(p=>p.isBot).map(p=>p.difficulty),hints:c.hints,timerSeconds:c.timerSeconds};
 }
 /** Positive allow-list: a public share never serializes evidence wholesale. */

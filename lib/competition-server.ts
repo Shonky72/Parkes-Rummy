@@ -44,6 +44,7 @@ export function createCompetitionHandlers(options:{competition?:CompetitionRepos
           case 'startAttempt':
             if(body.practice!==undefined&&typeof body.practice!=='boolean')throw new SecurityError('Choose a scored attempt or practice replay.',400);
             data={...await competition.reserveAttempt(user.id,identifier(body.token,'challenge invitation'),body.practice===true),token:accountMarker(user.id)};break;
+          case 'resumeAttempt':data={...await competition.resumeAttempt(user.id,identifier(body.attemptId,'saved attempt')),token:accountMarker(user.id)};break;
           case 'withdrawAttempt':await competition.withdrawAttempt(user.id,identifier(body.attemptId,'attempt'));break;
           case 'shareChallenge':data={challenge:await competition.shareChallenge(user.id,identifier(body.attemptId,'completed attempt'))};break;
           case 'revokeChallenge':await competition.revokeChallenge(user.id,identifier(body.challengeId,'challenge'));break;

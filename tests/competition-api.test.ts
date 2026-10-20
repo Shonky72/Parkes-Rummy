@@ -9,8 +9,9 @@ import { RecordsRepository } from '../db/records';
 import { PostgresRequestSecurity } from '../db/security';
 import { createCompetitionHandlers } from '../lib/competition-server';
 import { accountMarker, type AccountUser } from '../lib/auth-config';
-import { challengePoints, sydneyDayKey, sydneyMidnight, shiftCalendarDay } from '../lib/competition';
+import { challengePoints, sydneyMidnight, shiftCalendarDay } from '../lib/competition';
 import { applyChallengeAction } from '../lib/challenge-engine/v1';
+import { createRoom, createPlayer } from '../lib/rummy';
 import { RECORDS_ENGINE_VERSION, type RecordEvidence } from '../lib/records-types';
 import type { ChallengeConfig, ChallengeRoom } from '../lib/competition-types';
 import type { GameType, Meld } from '../lib/types';
@@ -146,6 +147,49 @@ test('Beat My Deal is explicit, redacted, revocable and preserves one first atte
   assert.equal((await competition.challenge(secondShare.token,null)).challengeId,challenge.id);
 });
 
+test('shared first attempts continue from My deals before and after revocation without exposing or granting a new private deal',async()=>{
+  const host=await account(),friend=await account(),outsider=await account(),challenge=await custom(host);
+  const source=await competition.reserveAttempt(host.id,challenge.token);await finishAttempt(host,source.attempt.id);
+  const shared=await competition.shareChallenge(host.id,source.attempt.id),started=await competition.reserveAttempt(friend.id,shared.token);
+  const preview=(await competition.snapshot(friend.id)).attempts.find(a=>a.id===started.attempt.id)!;
+  assert.equal(preview.token,shared.token);assert.notEqual(preview.token,challenge.token);
+  const before=await response(api(friend).mutate(request(friend,{action:'resumeAttempt',attemptId:preview.id})));assert.equal(before.status,200);
+  assert.equal(before.data.roomCode,started.roomCode);assert.equal(before.data.attempt.id,started.attempt.id);assert.equal(before.data.resumed,true);assert.ok(before.data.room);
+  assert.equal((await api(outsider).mutate(request(outsider,{action:'resumeAttempt',attemptId:started.attempt.id}))).status,404);
+  await competition.revokeChallenge(host.id,shared.id);assert.equal((await api(null).challenge(request(null),shared.token)).status,404);
+  await assert.rejects(competition.reserveAttempt(outsider.id,shared.token));await assert.rejects(competition.reserveAttempt(friend.id,shared.token));
+  const after=await response(api(friend).mutate(request(friend,{action:'resumeAttempt',attemptId:preview.id})));assert.equal(after.status,200);assert.equal(after.data.roomCode,started.roomCode);assert.equal(after.data.attempt.id,started.attempt.id);assert.ok(after.data.room);
+  await competition.revokeChallenge(host.id,challenge.id);const removedBase=await competition.resumeAttempt(friend.id,started.attempt.id);assert.ok(removedBase.room);assert.equal(removedBase.attempt.id,started.attempt.id);
+  assert.equal((await db.query('SELECT id FROM competition_attempts WHERE challenge_id=$1 AND user_id=$2',[challenge.id,friend.id])).rows.length,1);
+  await finishAttempt(friend,started.attempt.id);const finished=await competition.resumeAttempt(friend.id,started.attempt.id);assert.equal(finished.room,null);assert.equal(finished.attempt.status,'completed');
+  await assert.rejects(competition.reserveAttempt(friend.id,shared.token,true));
+});
+
+test('shared practice retains its invitation source and already granted Original seats survive a later host entitlement change',async()=>{
+  const host=await account(),friend=await account(),newcomer=await account();entitled.add(host.id);
+  const challenge=await custom(host,4),source=await competition.reserveAttempt(host.id,challenge.token);await finishAttempt(host,source.attempt.id);
+  const shared=await competition.shareChallenge(host.id,source.attempt.id),first=await competition.reserveAttempt(friend.id,shared.token);
+  entitled.delete(host.id);assert.equal((await competition.reserveAttempt(friend.id,shared.token)).attempt.id,first.attempt.id);
+  await assert.rejects(competition.reserveAttempt(newcomer.id,shared.token),/Original Rules access/);await finishAttempt(friend,first.attempt.id);
+  await assert.rejects(competition.reserveAttempt(friend.id,shared.token,true),/Original Rules access/);
+  entitled.add(host.id);const firstPreview=(await competition.snapshot(friend.id)).attempts.find(a=>a.id===first.attempt.id)!;
+  const practice=await competition.reserveAttempt(friend.id,firstPreview.token,true);assert.equal(practice.attempt.practice,true);assert.equal(practice.attempt.token,shared.token);
+  entitled.delete(host.id);const continued=await competition.reserveAttempt(friend.id,shared.token,true);assert.equal(continued.attempt.id,practice.attempt.id);
+  await competition.revokeChallenge(host.id,shared.id);const saved=await competition.resumeAttempt(friend.id,practice.attempt.id);assert.equal(saved.attempt.id,practice.attempt.id);assert.ok(saved.room);assert.equal(saved.room.challenge.practice,true);
+  await competition.withdrawAttempt(friend.id,practice.attempt.id);assert.equal((await competition.resumeAttempt(friend.id,practice.attempt.id)).room,null);
+  await assert.rejects(competition.reserveAttempt(friend.id,shared.token,true));
+});
+
+test('recycled room codes cannot expose or delete another table through a stale challenge reservation',async()=>{
+  const owner=await account(),other=await account(),challenge=await custom(owner),attempt=await competition.reserveAttempt(owner.id,challenge.token);
+  await db.query('DELETE FROM rooms WHERE code=$1',[attempt.roomCode]);
+  const replacement=createRoom(attempt.roomCode,createPlayer({id:'unrelated-host',name:'Other table',color:0,tokenHash:'unrelated-secret'}));
+  await competition.rooms.insert(replacement,{userId:other.id,playerId:'unrelated-host'});
+  const resumed=await competition.resumeAttempt(owner.id,attempt.attempt.id);assert.equal(resumed.room,null);assert.equal(resumed.attempt.status,'service-interrupted');
+  await competition.withdrawAttempt(owner.id,attempt.attempt.id);
+  const untouched=await competition.rooms.load(attempt.roomCode);assert.equal(untouched!.room.hostId,'unrelated-host');assert.equal(untouched!.version,replacement.version);
+});
+
 test('Original Rules invitation grants only the entitled host’s exact challenge, never creation or rehosting rights',async()=>{
   const host=await account(),friend=await account();await assert.rejects(custom(friend,4),/Original Rules access/);
   entitled.add(host.id);const original=await custom(host,4);const source=await competition.reserveAttempt(host.id,original.token);await finishAttempt(host,source.attempt.id);
@@ -198,6 +242,8 @@ test('club invitations require member consent and owner approval, and privacy cl
   await assert.rejects(competition.club(member.id,club.id));const pending=(await competition.club(owner.id,club.id)).members.find(m=>m.status==='pending')!;
   await assert.rejects(competition.clubAction(member.id,'approveMember',club.id,pending.id));await competition.clubAction(owner.id,'approveMember',club.id,pending.id);
   const joined=await competition.club(member.id,club.id);assert.equal(joined.members.length,2);for(const secret of [owner.id,member.id,owner.email,member.email,owner.name])assert.ok(!JSON.stringify(joined).includes(secret));
+  const dashboard=await competition.snapshot(member.id);assert.deepEqual(dashboard.clubs.find(c=>c.id===club.id),{id:club.id,name:club.name,role:'member',status:'member'});
+  assert.ok(!JSON.stringify(dashboard.clubs).includes('consistency'));
   await assert.rejects(competition.clubAction(owner.id,'leaveClub',club.id),/Transfer ownership/);await competition.clubAction(member.id,'leaveClub',club.id);await assert.rejects(competition.club(member.id,club.id));
   await competition.requestClub(member.id,club.code);const another=(await competition.club(owner.id,club.id)).members.find(m=>m.status==='pending')!;await competition.clubAction(owner.id,'blockMember',club.id,another.id);
   await assert.rejects(competition.requestClub(member.id,club.code));await competition.clubAction(owner.id,'unblockMember',club.id,another.id);
@@ -237,6 +283,19 @@ test('a winner leaving after the week closes receives the immutable trophy befor
   const trophies=(await db.query<{user_id:string}>('SELECT user_id FROM competition_trophies WHERE club_id=$1 AND week=$2',[club.id,'2026-11-30'])).rows;
   assert.deepEqual(trophies,[{user_id:winner.id}]);assert.equal((await competition.club(owner.id,club.id)).trophies.length,1);
   await assert.rejects(competition.club(winner.id,club.id));
+});
+
+test('a long break does not discard trophies older than twelve unviewed weeks when a member leaves',async()=>{
+  const firstWeek='2027-01-04';now=sydneyMidnight(firstWeek)+12*3600000;
+  const owner=await account(),winner=await account(),club=await competition.createClub(owner.id,'Long Break Club');
+  await competition.requestClub(winner.id,club.code);const pending=(await competition.club(owner.id,club.id)).members.find(m=>m.status==='pending')!;await competition.clubAction(owner.id,'approveMember',club.id,pending.id);
+  for(let week=0;week<13;week++){
+    now=sydneyMidnight(shiftCalendarDay(firstWeek,week*7))+12*3600000;
+    const {daily}=await competition.publishCalendar(),attempt=await competition.reserveAttempt(winner.id,daily.token);await finishAttempt(winner,attempt.attempt.id);
+  }
+  now=sydneyMidnight(shiftCalendarDay(firstWeek,13*7))+3*3600000;await competition.clubAction(winner.id,'leaveClub',club.id);
+  const trophies=(await db.query<{week:string}>('SELECT week FROM competition_trophies WHERE club_id=$1 ORDER BY week',[club.id])).rows;
+  assert.equal(trophies.length,13);assert.equal(trophies[0].week,firstWeek);assert.equal(trophies.at(-1)!.week,shiftCalendarDay(firstWeek,12*7));
 });
 
 test('friend duel requires explicit recipient acceptance, exposes exactly three fixed deals and counts only first attempts',async()=>{

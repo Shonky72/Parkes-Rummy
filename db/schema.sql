@@ -169,7 +169,8 @@ CREATE TABLE IF NOT EXISTS competition_attempts (
  user_id text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
  room_code text NOT NULL UNIQUE, player_id text NOT NULL, hand_id text NOT NULL,
  scored boolean NOT NULL, status text NOT NULL CHECK(status IN ('active','completed','abandoned','service-interrupted')),
- score jsonb, daily_day text, created_at bigint NOT NULL, deadline_at bigint NOT NULL, finished_at bigint);
+ score jsonb, daily_day text, source_token text, created_at bigint NOT NULL, deadline_at bigint NOT NULL, finished_at bigint);
+ALTER TABLE competition_attempts ADD COLUMN IF NOT EXISTS source_token text;
 CREATE UNIQUE INDEX IF NOT EXISTS competition_first_attempt ON competition_attempts(challenge_id,user_id) WHERE scored=true;
 CREATE UNIQUE INDEX IF NOT EXISTS competition_active_practice ON competition_attempts(challenge_id,user_id) WHERE scored=false AND status='active';
 CREATE INDEX IF NOT EXISTS competition_attempt_owner ON competition_attempts(user_id,created_at DESC);
