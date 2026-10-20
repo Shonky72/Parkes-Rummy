@@ -21,6 +21,8 @@ jobs:
       - run: npm run typecheck
       - run: node --import tsx --test tests/original-rules.test.ts tests/tutorial.test.ts tests/quick-play.test.ts tests/tutorial-coaching.test.ts tests/phone-install.test.ts tests/bot-turn.test.ts tests/bot-turn-api.test.ts tests/rummy.test.ts tests/rule-progression.test.ts tests/draw-card-drag.test.ts tests/meld-layout.test.ts tests/request-origin.test.ts tests/activity.test.ts tests/hand-reveal.test.ts
       - run: npm run test:backend
+      - name: Verify records, frozen challenges, clubs and ranked integrity
+        run: node --import tsx --test tests/client-identity.test.ts tests/records-engine.test.ts tests/records-api.test.ts tests/records-room-api.test.ts tests/competition.test.ts tests/competition-api.test.ts tests/ladder-api.test.ts
       - run: node tests/activity-fixture.mjs && npm run build
       - run: rm -rf app/__activity_ui_fixture
       - name: Install browser test tools
@@ -33,6 +35,28 @@ jobs:
       - name: Verify approved starts, connected voice and end-hand reveal
         if: ${{ !cancelled() && steps.browser_tools.outcome == 'success' }}
         run: node --import tsx tests/reveal-session-ui.mjs
+      - name: Verify all three gamification releases through real services and isolated SQL
+        if: ${{ !cancelled() && steps.browser_tools.outcome == 'success' }}
+        run: node --import tsx tests/gamification-ui.mjs
+      - name: Verify earned records appear after the full winning-card reveal
+        if: ${{ !cancelled() && steps.browser_tools.outcome == 'success' }}
+        run: node --import tsx tests/records-result-ui.mjs
+      - name: Save gamification screenshots and checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamification-results
+          path: gamification-results/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Save authenticated result-highlight screenshots and checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: records-result-results
+          path: records-result-results/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Save reveal and session screenshots
         if: always()
         uses: actions/upload-artifact@v4

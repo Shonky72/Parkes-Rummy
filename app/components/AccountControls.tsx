@@ -19,7 +19,7 @@ function GoogleMark() {
 export function AccountControls({ account, compact = false, disabled = false }: { account: AccountSnapshot; compact?: boolean; disabled?: boolean }) {
   return <section className={`account-controls${compact ? ' account-controls-compact' : ''}`} aria-label="Your account">
     {account.user ? <>
-      <div className="account-signed-in"><span className="account-check"><Check size={17} aria-hidden="true"/></span><div><strong>{account.user.name}</strong><p>Games available on your phone and desktop</p></div><button type="button" className="button outline account-signout" disabled={disabled} onClick={() => { void signOutAccount(); }} aria-label={`Sign out ${account.user.name}`}><LogOut size={16} aria-hidden="true"/><span>Sign out</span></button></div>
+      <div className="account-signed-in"><span className="account-check"><Check size={17} aria-hidden="true"/></span><div><strong><a href="/profile" className="account-profile-link" aria-label="My profile" title="My profile, records and achievements">{account.user.name}</a></strong><p>Games available on your phone and desktop</p></div><button type="button" className="button outline account-signout" disabled={disabled} onClick={() => { void signOutAccount(); }} aria-label={`Sign out ${account.user.name}`}><LogOut size={16} aria-hidden="true"/><span>Sign out</span></button></div>
     </> : <>
       <div className="account-intro"><Smartphone size={19} aria-hidden="true"/><div><strong>Sign in to play across devices</strong><p>Guest play works without an account.</p></div></div>
       <button type="button" className="google-signin" disabled={disabled || !account.configured} onClick={() => { void signInWithGoogle(); }}><GoogleMark/><span>Sign in with Google</span></button>

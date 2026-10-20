@@ -24,3 +24,5 @@
 .account-check-panel p { color: #c4d5c6; font-size: 14px; line-height: 1.55; }
 .account-check-panel > .button { width: 100%; min-height: 44px; margin-top: 20px; }
 @media (max-width: 380px) { .account-signed-in { gap: 8px; } .account-check { display: none; } .account-controls .account-signout { padding: 8px; } }
+
+.account-profile-link{color:inherit;text-decoration:underline;text-decoration-color:#e7c57b88;text-underline-offset:3px}.account-profile-link:focus-visible{outline:2px solid #f5d581;outline-offset:3px}

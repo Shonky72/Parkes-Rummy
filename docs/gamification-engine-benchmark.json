@@ -1,0 +1,143 @@
+{
+  "runtime": "v24.19.0",
+  "readiness": {
+    "samples": 1200,
+    "medianMs": 0.211,
+    "p95Ms": 2.369,
+    "maxMs": 33.404
+  },
+  "exampleCatalogMs": 26.103,
+  "acceptedDraw": [
+    {
+      "players": 2,
+      "plain": {
+        "samples": 400,
+        "medianMs": 0.067,
+        "p95Ms": 0.123,
+        "maxMs": 0.718
+      },
+      "recorded": {
+        "samples": 400,
+        "medianMs": 0.35,
+        "p95Ms": 3.039,
+        "maxMs": 7.123
+      },
+      "medianAddedMs": 0.283
+    },
+    {
+      "players": 4,
+      "plain": {
+        "samples": 400,
+        "medianMs": 0.071,
+        "p95Ms": 0.14,
+        "maxMs": 0.383
+      },
+      "recorded": {
+        "samples": 400,
+        "medianMs": 0.406,
+        "p95Ms": 3.108,
+        "maxMs": 11.97
+      },
+      "medianAddedMs": 0.335
+    },
+    {
+      "players": 8,
+      "plain": {
+        "samples": 400,
+        "medianMs": 0.136,
+        "p95Ms": 0.247,
+        "maxMs": 5.989
+      },
+      "recorded": {
+        "samples": 400,
+        "medianMs": 0.575,
+        "p95Ms": 3.086,
+        "maxMs": 6.74
+      },
+      "medianAddedMs": 0.439
+    }
+  ],
+  "slowestRules": [
+    {
+      "rule": "4:10",
+      "readiness": {
+        "samples": 30,
+        "medianMs": 6.522,
+        "p95Ms": 21.265,
+        "maxMs": 33.404
+      }
+    },
+    {
+      "rule": "4:7",
+      "readiness": {
+        "samples": 30,
+        "medianMs": 2.515,
+        "p95Ms": 5.181,
+        "maxMs": 5.259
+      }
+    },
+    {
+      "rule": "4:5",
+      "readiness": {
+        "samples": 30,
+        "medianMs": 0.623,
+        "p95Ms": 4.914,
+        "maxMs": 8.425
+      }
+    },
+    {
+      "rule": "4:2",
+      "readiness": {
+        "samples": 30,
+        "medianMs": 1.334,
+        "p95Ms": 3.604,
+        "maxMs": 6.628
+      }
+    },
+    {
+      "rule": "1:1",
+      "readiness": {
+        "samples": 30,
+        "medianMs": 0.722,
+        "p95Ms": 2.864,
+        "maxMs": 3.062
+      }
+    },
+    {
+      "rule": "4:9",
+      "readiness": {
+        "samples": 30,
+        "medianMs": 0.825,
+        "p95Ms": 2.576,
+        "maxMs": 2.619
+      }
+    },
+    {
+      "rule": "2:5",
+      "readiness": {
+        "samples": 30,
+        "medianMs": 0.334,
+        "p95Ms": 2.508,
+        "maxMs": 6.952
+      }
+    },
+    {
+      "rule": "4:4",
+      "readiness": {
+        "samples": 30,
+        "medianMs": 0.965,
+        "p95Ms": 2.288,
+        "maxMs": 2.299
+      }
+    }
+  ],
+  "measurement": {
+    "localOnly": true,
+    "scope": "Synthetic local engine benchmark; no network, database, accounts or production records. These timings are not a production latency SLA.",
+    "sourceCommit": "8c92615c91cdd7e492c8e922bc2c51a73e065569",
+    "command": "node --import tsx scripts/benchmark-records.ts",
+    "elapsedSeconds": 2.253,
+    "seededReadinessHands": 1200,
+    "acceptedDrawSamplesPerCohort": 400
+  }
+}

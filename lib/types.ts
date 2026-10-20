@@ -1,4 +1,5 @@
 import type { FontId, SymbolId } from './store-catalog';
+import type { RoomRecords } from './records-types';
 export type Suit = 'C' | 'D' | 'H' | 'S';
 export type GameType = 1 | 2 | 3 | 4;
 export type Difficulty = 'easy' | 'medium' | 'hard';
@@ -48,6 +49,10 @@ export interface ScoreRow {
 }
 export interface RoundResult { round: number; winnerId: string; winnerName: string; scores: ScoreRow[] }
 export interface RoomState {
+  /** Server-private observations and durable outbox. Never included in PublicRoom. */
+  records?: RoomRecords;
+  /** Ranked admission is server-owned; the match identifier is never public. */
+  ranked?: { format: 'ranked-human-v1'; matchId: string };
   /** Present only on new single-hand Quick Play rooms; old saves retain normal progression. */
   quickPlay?: { ruleNumber: number };
   code: string; hostId: string; game: GameType; round: number;
@@ -63,6 +68,13 @@ export interface RoomState {
   recentActions: string[];
 }
 export interface PublicRoom {
+  /** Announces the locked format without exposing private admission identifiers. */
+  ranked?: { format: 'ranked-human-v1' };
+  /** Owner-only completed-hand highlight. Absent during play and the lobby. */
+  completedRecord?: {
+    handId: string; openingTurn: number | null; firstLegalTurn: number | null;
+    opportunitiesPassed: number; achievements: string[];
+  };
   /** Present only on new single-hand Quick Play rooms; old saves retain normal progression. */
   quickPlay?: { ruleNumber: number };
   code: string; hostId: string; game: GameType; round: number;
