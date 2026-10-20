@@ -102,10 +102,20 @@ try{
  console.log('PASS: late permission and late HTTP cannot restart microphone or polling after exit');
 
  const adContext=await browser.newContext();await setup(adContext);const adPage=await adContext.newPage();
- await adPage.goto(base);await adPage.getByRole('button',{name:'Decline',exact:true}).click();assert.equal(ads,0);
+ await adPage.goto(base);assert.equal(await adPage.locator('#parkes-advertising-script').count(),0);assert.equal(ads,0);
+ await adPage.goto(`${base}/how-to-play`);await adPage.getByRole('button',{name:'Decline',exact:true}).click();assert.equal(ads,0);
  await adPage.goto(`${base}/cookies`);await adPage.getByRole('button',{name:'Advertising choices',exact:true}).click();await adPage.getByRole('button',{name:'Allow advertising',exact:true}).click();
- await adPage.goto(base);for(let i=0;i<50&&ads===0;i++)await new Promise(r=>setTimeout(r,100));assert.equal(ads,1);
- const freeContext=await browser.newContext();await setup(freeContext,'adfree');await freeContext.addInitScript(()=>localStorage.setItem('parkes-rummy:advertising-consent-v1','accepted'));const free=await freeContext.newPage();await free.goto(base);await free.locator('.parkes-app').waitFor();await new Promise(r=>setTimeout(r,500));assert.equal(ads,1);
+ async function accountPaint(page,action){
+  const response=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/account/session'&&response.status()===200);
+  await action();await (await response).finished();
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ }
+ for(const path of ['/', '/?tab=store', '/profile', '/competition', '/ladder', '/tutorial', '/cookies']){
+  await accountPaint(adPage,()=>adPage.goto(`${base}${path}`));assert.equal(await adPage.locator('#parkes-advertising-script').count(),0,path);assert.equal(await adPage.locator('.adsbygoogle').count(),0,path);assert.equal(ads,0,path);
+ }
+ await adPage.goto(`${base}/how-to-play`);for(let i=0;i<50&&ads===0;i++)await new Promise(r=>setTimeout(r,100));assert.equal(ads,1);
+ await accountPaint(adPage,()=>adPage.locator('a[href="/"]').first().click());await adPage.waitForURL(`${base}/`);await adPage.locator('.home-main').waitFor();assert.equal(await adPage.locator('#parkes-advertising-script').count(),0);assert.equal(await adPage.locator('.adsbygoogle').count(),0);assert.equal(ads,1);
+ const freeContext=await browser.newContext();await setup(freeContext,'adfree');await freeContext.addInitScript(()=>localStorage.setItem('parkes-rummy:advertising-consent-v1','accepted'));const free=await freeContext.newPage();await accountPaint(free,()=>free.goto(`${base}/how-to-play`));await free.getByRole('heading',{level:1}).first().waitFor();assert.equal(await free.locator('#parkes-advertising-script').count(),0);assert.equal(await free.locator('.adsbygoogle').count(),0);assert.equal(ads,1);
  assert.deepEqual(cspErrors,[]);
- console.log('PASS: declined/fresh/ad-free sessions load no ad script; explicit eligible opt-in does');
+ console.log('PASS: advertising stays off game/private/utility pages and declined/fresh/ad-free sessions; opted-in guides use the configured slot');
 }finally{await browser?.close();server.kill();}
