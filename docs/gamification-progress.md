@@ -38,6 +38,7 @@ Keep existing gameplay, all 40 authoritative rules, purchases, Google identity, 
 
 ## Validation
 
+- Final CI exposed the retained one-write return contract: ordinary UPDATEs now use affected rowCount, while evidence CTEs use their returned changed-code row. The unchanged retained assertion and 47 records/room/ladder integrity cases pass after the fix.
 - Locked dependencies installed with `npm ci` on Node 24; lockfile unchanged. Baseline and repeated integrated typechecks and production builds passed.
 - All seven existing backend wrapper suites passed (account, authentication, activity, origin, payments, security and voice lifecycle). New records engine, records API and room integration pass; all 40 example openings validate. Pure competition/frozen engine: 19 passed. Ladder SQL/API: 19 passed. Competition SQL/API: 23 passed, including revoked-link resumption and recycled-room-code isolation.
 - Full real-service browser run passed (14 grouped acceptance checks, zero browser/API errors): anonymous privacy, chosen name and earned featured badges, all 40 pages, pending denominator, private review, real 1200×630 saved PNG and native share arguments, link copy/revocation, friend consent/comparison, daily deal draw/resumption/practice, custom conditions, shared/revoked/replacement-link identity, club consent and private boards, established consistency denominators, six original duel attempts and a tied result, actual shared-hand rematch acceptance, explicit ladder consent and Elo forfeit, sign-out and no runtime errors.

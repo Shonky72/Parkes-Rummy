@@ -74,15 +74,19 @@ export class PostgresRoomRepository implements RoomRepository {
     // A single conditional UPDATE is already atomic. Card moves do not change
     // membership, so BEGIN, membership DELETE and COMMIT add no protection here.
     // Leave/join/removal still use the full transaction below.
+    // UPDATE uses the affected-row contract. The evidence CTE ends in SELECT;
+    // its returned changed code is authoritative even when a driver reports
+    // zero affected rows for that SELECT (as PGlite does).
     if (!membership && options?.membershipUnchanged === true && !rankedFinish) {
-      const saved=(await this.db.query(sql, values)).rows.length === 1;
+      const result=await this.db.query(sql, values);
+      const saved=(events.length?result.rows.length:result.rowCount)===1;
       if(saved&&room.records)room.records.events=[];
       return saved;
     }
     try {
       const saved=await this.db.transaction(async connection => {
         const result = await connection.query(sql, values);
-        if (result.rows.length !== 1) return false;
+        if ((events.length?result.rows.length:result.rowCount)!==1) return false;
         await connection.query('DELETE FROM room_memberships WHERE room_code = $1 AND NOT (player_id = ANY($2::text[]))', [room.code, room.players.filter(player => !player.isBot).map(player => player.id)]);
         if (membership) await addMembership(connection, room.code, membership);
         if(rankedFinish)await processRankedRoom(connection,room);
