@@ -1,14 +1,16 @@
 # Gamification progress
 
-## Current checkpoint: 20 October 2026 (Sydney), release acceptance
+## Current checkpoint: 20 October 2026 (Sydney), production context correction
 
 - Approved scope: complete Releases 1, 2 and 3 from the supplied handover.
-- Working branch: `feature/rule-records-achievements`.
+- Working branch: `fix/build-deployment-context`, following the merged `feature/rule-records-achievements` increment.
 - Verified source baseline: `cd878fa33419a10e2d5aff6c4cf2566428b0558a` on main.
 - Recovered feature head: `6f48fb5` (three transport/recovery commits only; no gamification implementation).
-- Production checked: Netlify deployment `6ad5f475c1d499086c862898`, context production, published and ready, commit `cd878fa33419a10e2d5aff6c4cf2566428b0558a`.
-- Previous remotely saved integrated source: `ed99bf3c1e528b8a2db3cd8014b64b5cfc855c1d`. This checkpoint adds audited reservation, trophy, performance and browser-acceptance fixes.
-- No new gamification release is live at this checkpoint. Production still requires final exact-commit verification.
+- Original production baseline: Netlify deployment `6ad5f475c1d499086c862898`, commit `cd878fa33419a10e2d5aff6c4cf2566428b0558a`.
+- PR #15 merged as `8950a3cf87fd7d8a2530108003d5208b05a62418` after CI #82 passed on `5edb50bfb09a88ad5f493f25893dba6ff0564084`. The merge tree exactly matches the tested feature tree `5e33e622b1add93428a4a81b790efd8771f7c11f`.
+- Production deployment `6ad6b562bbe583187553f5c3` is confirmed ready/published at `2026-10-20T00:28:14.130Z`, context production, exact merge commit `8950a3cf87fd7d8a2530108003d5208b05a62418`. Public pages and private record authentication work, but the anonymous competition probe returned the preview-only 409 response. Publication alone did not pass release acceptance.
+- Netlify supplies `CONTEXT` during builds, not Functions runtime. This correction embeds only its nonsecret value through Next's `env` config and centralizes records, competition, ladder and existing preview-presence checks. A preview build takes precedence over a conflicting runtime flag; unknown contexts still disable collection and competition. Records profile/shared endpoints, recorded-lobby admissions and game-start activity now preserve the same preview boundary. Admission rechecks the current room under its SQL lock.
+- No complete/live release claim is made at this predeployment checkpoint. The corrected build still needs final CI, preview isolation and exact production confirmation. The final deployment record will be appended to the merged correction PR, avoiding a documentation-only deployment loop.
 
 ## Preservation requirements
 
@@ -23,9 +25,8 @@ Keep existing gameplay, all 40 authoritative rules, purchases, Google identity, 
 
 ## Remaining release queue
 
-1. Inspect the exact final-head CI and Netlify deploy preview for PR #15. The full 14-group gamification browser run and focused authenticated post-reveal result check now pass.
-2. Recheck current main and merge using the expected tested head.
-3. Verify the exact production deployment ID, published/ready status and commit. Update this file with live release status and the history start point.
+1. Inspect the correction PR's exact-head CI and Netlify preview; merge using the tested expected head after all gates pass.
+2. Confirm the corrected production deployment ID, published/ready status and exact merge commit. Recheck production pages and anonymous API entry points, including competition/ladder reaching sign-in rather than the preview gate. Save the final identity and history start point in the merged PR record.
 
 ## Decisions
 
@@ -38,6 +39,9 @@ Keep existing gameplay, all 40 authoritative rules, purchases, Google identity, 
 
 ## Validation
 
+- PR #15 CI #82 passed all gates: 174 retained engine/game test executions, 42 retained backend executions, 113 records/challenge/ranked integrity tests, all nine retained browser suites, 14 grouped gamification browser checks, authenticated post-reveal checks at four widths, build/typecheck/audit and the real Netlify preview Origin probe. Evidence: [CI run 39346951506](https://github.com/Shonky72/Parkes-Rummy/actions/runs/39346951506).
+- The deployment-context correction passes nine strict precedence/default-handler/activity tests, all 18 records SQL/API tests and all 12 recorded-room API tests. New admission regressions cover both pre-handler denial and the newer locked SQL state, with unchanged pending requests, memberships and room state after rejection. Existing assertions remain intact.
+- Actual compiled-context matrix passes all seven HTTP assertions, with exact source hashes saved in [gamification-deployment-context.json](gamification-deployment-context.json). Build `DpKFvFNlMz4PJ2RCWweSM` captures production, then returns 401 for records/competition/ladder with both runtime context variables absent. Build `Wul9g4Jwwk0AilwOTeBVt` captures deploy-preview and returns 409 for all three despite runtime `CONTEXT=production`; presence returns 204 without a visitor cookie. Both builds had no database/auth/platform credentials. A real Netlify preview probe is now an additional CI gate; corrected final CI and production confirmation remain.
 - Final CI exposed the retained one-write return contract: ordinary UPDATEs now use affected rowCount, while evidence CTEs use their returned changed-code row. The unchanged retained assertion and 47 records/room/ladder integrity cases pass after the fix.
 - Locked dependencies installed with `npm ci` on Node 24; lockfile unchanged. Baseline and repeated integrated typechecks and production builds passed.
 - All seven existing backend wrapper suites passed (account, authentication, activity, origin, payments, security and voice lifecycle). New records engine, records API and room integration pass; all 40 example openings validate. Pure competition/frozen engine: 19 passed. Ladder SQL/API: 19 passed. Competition SQL/API: 23 passed, including revoked-link resumption and recycled-room-code isolation.

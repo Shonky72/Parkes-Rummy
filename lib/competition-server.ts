@@ -5,6 +5,7 @@ import { ACCOUNT_IDENTITY_HEADER, accountMarker, type AccountUser } from './auth
 import { isAllowedRoomWriteOrigin } from './request-origin';
 import { boundedJson } from './request-body';
 import { RECORDS_PRIVATE_HEADERS, RECORDS_PUBLIC_HEADERS } from './records-server';
+import { isProductionDeployment } from './deployment-context';
 type Resolver=(request:Request)=>Promise<AccountUser|null>;
 function identifier(value:unknown,label='competition'):string {
   if(typeof value!=='string'||!value||value.length>200||/[\u0000-\u001f\u007f]/.test(value))throw new SecurityError(`Choose a valid ${label}.`,400);
@@ -17,7 +18,7 @@ function failure(error:unknown):Response {
 }
 export function createCompetitionHandlers(options:{competition?:CompetitionRepository;resolveSession?:Resolver;security?:RequestSecurity;enabled?:boolean}={}) {
   const competition=options.competition??competitionRepository,resolve=options.resolveSession??resolveAccountUser,security=options.security??requestSecurity;
-  const enabled=options.enabled??process.env.CONTEXT==='production';
+  const enabled=options.enabled??isProductionDeployment();
   async function authenticate(request:Request,write:boolean):Promise<AccountUser> {
     if(!enabled)throw new SecurityError('Continue Challenges on parkesrummy.com. Preview deployments do not create or change competition records.',409);
     if(request.headers.get('Sec-Fetch-Site')==='cross-site'||write&&!isAllowedRoomWriteOrigin(request)||request.headers.has('Origin')&&!isAllowedRoomWriteOrigin(request))throw new SecurityError('Open Parkes Rummy directly to continue.',403);

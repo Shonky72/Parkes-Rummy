@@ -6,13 +6,14 @@ import type { QueryResultRow } from 'pg';
 import type { SqlDatabase, SqlConnection } from '../db';
 import { RecordsRepository, RECORDS_SCHEMA, recordsWriteCtes, redactSharedRecord } from '../db/records';
 import { PostgresRoomRepository } from '../db/room-repository';
-import { PostgresRequestSecurity } from '../db/security';
+import { PostgresJoinRequests } from '../db/join-requests';
+import { PostgresRequestSecurity, SecurityError } from '../db/security';
 import { createRecordsHandlers } from '../lib/records-server';
 import { sharedRecordImage } from '../lib/records-share-image';
 import { createRoom, createPlayer, applyAction, enableRecords, publicRoom } from '../lib/rummy';
 import { accountMarker, type AccountUser } from '../lib/auth-config';
 import { RECORDS_ENGINE_VERSION, type RecordEvidence, type RoomRecordEvent } from '../lib/records-types';
-import type { Meld } from '../lib/types';
+import type { Meld, RoomState } from '../lib/types';
 
 const pg=new PGlite();
 const statements:string[]=[];
@@ -22,7 +23,7 @@ function connection(target:Pick<PGlite|Transaction,'query'>):SqlConnection {
 const db:SqlDatabase={...connection(pg),transaction:work=>pg.transaction(tx=>work(connection(tx)))};
 const records=new RecordsRepository(db),rooms=new PostgresRoomRepository(db);
 const security=new PostgresRequestSecurity(db);
-const API=(user:AccountUser|null)=>createRecordsHandlers({records,security,resolveSession:async()=>user});
+const API=(user:AccountUser|null)=>createRecordsHandlers({records,security,resolveSession:async()=>user,enabled:true});
 const req=(user:AccountUser|null,body?:unknown,path='/api/records',pin?:string,origin='https://parkesrummy.com')=>new Request(`https://internal--parkes-rummy.netlify.app:80${path}`,{
   method:body===undefined?'GET':'POST',headers:{'x-nf-client-connection-ip':'192.0.2.21',Origin:origin,'Content-Type':'application/json','X-Parkes-Identity':pin??(user?accountMarker(user.id):'guest')},...(body===undefined?{}:{body:JSON.stringify(body)}),
 });
@@ -124,6 +125,47 @@ test('essential evidence failure rolls back the game update rather than losing a
   assert.equal((await rooms.load(room.code))!.version,previous);
   assert.ok(room.records!.events.length>0);
   assert.equal(await rooms.save(room,previous,undefined,{membershipUnchanged:true}),true);
+});
+
+test('recorded-lobby admission rechecks the locked room and denied writes preserve requests, seats and state',async()=>{
+  const owner=await user('Admission Owner'),pendingUser=await user('Pending Member'),newUser=await user('New Applicant');
+  const host=createPlayer({id:'admission-owner-seat',name:'Admission Owner',color:0,tokenHash:'private-admission-host'});
+  const room=createRoom('RGAT',host),joins=new PostgresJoinRequests(db);
+  assert.equal(await rooms.insert(room,{userId:owner.id,playerId:host.id}),true);
+  const pendingPlayer=createPlayer({id:'admission-pending-seat',name:'Pending Member',color:1,tokenHash:'private-pending-seat'});
+  const pending=await joins.submit(room.code,room.createdAt,accountMarker(pendingUser.id),pendingUser.id,pendingPlayer);
+  assert.equal(pending.status,'pending','A legitimate pending request must exist before the context changes');
+  const stale=await rooms.load(room.code);
+  assert.equal(stale!.room.records,undefined);
+
+  // The handler's earlier read may precede production returning this same
+  // lobby to a recorded state. Admission must inspect the later locked row.
+  const recorded=structuredClone(stale!.room);
+  enableRecords(recorded,{eligiblePlayerIds:[host.id]});
+  recorded.version++;recorded.updatedAt=Date.now();
+  assert.equal(await rooms.save(recorded,stale!.version),true);
+  const snapshot=async()=>({
+    rooms:(await db.query('SELECT code,state,version,updated_at FROM rooms WHERE code=$1',[room.code])).rows,
+    requests:(await db.query('SELECT * FROM join_requests WHERE room_code=$1 ORDER BY id',[room.code])).rows,
+    memberships:(await db.query('SELECT * FROM room_memberships WHERE room_code=$1 ORDER BY user_id,player_id',[room.code])).rows,
+  });
+  const beforeDenied=await snapshot();
+  const checked:{version:number;gameId:string}[]=[];
+  const previewGuard=(locked:RoomState)=>{
+    assert.equal(locked.code,room.code);
+    assert.equal(locked.status,'lobby');
+    assert.equal(locked.version,recorded.version,'The guard must receive the current locked state, not the earlier read');
+    assert.equal(locked.records?.gameId,recorded.records!.gameId);
+    checked.push({version:locked.version,gameId:locked.records!.gameId});
+    if(locked.records)throw new SecurityError('Continue this recorded game on parkesrummy.com.',409);
+  };
+  const denied=(error:unknown)=>error instanceof SecurityError&&error.status===409;
+  const newcomer=createPlayer({id:'admission-new-seat',name:'New Applicant',color:2,tokenHash:'private-new-seat'});
+  await assert.rejects(()=>joins.submit(room.code,stale!.room.createdAt,accountMarker(newUser.id),newUser.id,newcomer,previewGuard),denied);
+  assert.deepEqual(await snapshot(),beforeDenied,'Denied submit must not add requests or change existing pending requests, memberships or the room');
+  await assert.rejects(()=>joins.decide(room.code,stale!.room.createdAt,host.id,pending.id,true,previewGuard),denied);
+  assert.deepEqual(await snapshot(),beforeDenied,'Denied approval must retain the pending request and must not admit a seat or change the room');
+  assert.equal(checked.length,2,'Both admission transactions must invoke the locked-room guard');
 });
 
 test('late sign-in cannot claim a guest deal and a finished event cannot transfer its original account ownership',async()=>{

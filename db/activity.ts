@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { database, type SqlDatabase } from './index';
 import type { RoomState } from '../lib/types';
 import { ACTIVITY_ONLINE_MS, type ActivityDay, type ActivityGame, type ActivityPlace, type ActivityPlayer, type ActivitySnapshot } from '../lib/activity-types';
+import { deploymentContext } from '../lib/deployment-context';
 
 export const ACTIVITY_SCHEMA = `DO $$ BEGIN
 CREATE TABLE IF NOT EXISTS activity_meta (id integer PRIMARY KEY CHECK(id=1), started_at bigint NOT NULL, cleaned_at bigint NOT NULL DEFAULT 0);
@@ -65,6 +66,8 @@ export class ActivityRepository {
     await this.db.query('DELETE FROM activity_presence WHERE session_key=$1 AND actor_key=$2',[sessionKey,actorKey]);
   }
   async gameStarted(room: RoomState): Promise<void> {
+    const context = deploymentContext();
+    if (context === 'deploy-preview' || context === 'branch-deploy') return;
     const event = room.events.findLast(e => e.type === 'start');
     if (!event || room.round !== 1 || room.status !== 'playing') return;
     await this.ensure();

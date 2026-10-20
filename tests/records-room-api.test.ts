@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Membership, NewMembership, RoomRecord, RoomRepository, SaveOptions } from '../db/room-repository';
+import type { PostgresJoinRequests } from '../db/join-requests';
 import { SecurityError } from '../db/security';
 import { createRoomHandlers, recordsCollectionAllowed } from '../lib/room-server';
 import { applyAction, createPlayer, createRoom, enableRecords, publicRoom } from '../lib/rummy';
@@ -150,6 +151,35 @@ test('preview reads retain seat authorization but cannot mutate or delete tracke
   const deleted = await result(preview.deleteRoomRequest(request(`/api/rooms/${table.room.code}`, { expectedVersion: before.version }, owner), table.room.code));
   assert.equal(deleted.status, 409);
   assert.deepEqual(await repository.load(table.room.code), before);
+});
+
+test('preview cannot request, approve or cancel seats in a recorded lobby, while untracked invitations still work', async () => {
+  let admissionCalls = 0;
+  const joins = {
+    submit: async () => { admissionCalls++; return { id: 'pending-seat', status: 'pending', expires_at: String(Date.now() + 60_000) }; },
+    decide: async () => { admissionCalls++; return 'approved'; },
+    cancel: async () => { admissionCalls++; },
+  } as unknown as PostgresJoinRequests;
+  const { api, repository } = setup(false, new MemoryRooms(), { joins });
+  const room = createRoom('RMLB', createPlayer({ id: 'owner-seat', name: 'Owner', color: 0, tokenHash: 'private-account-marker' }));
+  enableRecords(room, { eligiblePlayerIds: [room.hostId] });
+  repository.put(room, [{ userId: owner.id, playerId: room.hostId, hidden: false }]);
+  const before = await repository.load(room.code);
+  const join = await result(api.joinRoomRequest(request(`/api/rooms/${room.code}/join`, { name: 'Friend' }, friend), room.code));
+  const review = await result(api.reviewJoinRequest(request(`/api/rooms/${room.code}/join-requests`, { id: 'pending-seat', decision: 'approve' }, owner), room.code));
+  const cancel = await result(api.cancelJoinRequest(request(`/api/rooms/${room.code}/join-requests`, {}, friend), room.code));
+  for (const response of [join, review, cancel]) {
+    assert.equal(response.status, 409, JSON.stringify(response.body));
+    assert.match(response.body.error, /production records/);
+  }
+  assert.equal(admissionCalls, 0);
+  assert.deepEqual(await repository.load(room.code), before);
+
+  const ordinary = createRoom('OPEN', createPlayer({ id: 'untracked-host', name: 'Host', color: 0, tokenHash: 'guest-hash' }));
+  repository.put(ordinary);
+  const allowed = await result(api.joinRoomRequest(request(`/api/rooms/${ordinary.code}/join`, { name: 'Friend' }, friend), ordinary.code));
+  assert.equal(allowed.status, 202, JSON.stringify(allowed.body));
+  assert.equal(admissionCalls, 1);
 });
 
 function fixedRoom(code = 'FIXD') {

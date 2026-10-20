@@ -4,6 +4,7 @@ import { resolveAccountUser } from './auth';
 import { ACCOUNT_IDENTITY_HEADER, accountMarker, type AccountUser } from './auth-config';
 import { isAllowedRoomWriteOrigin } from './request-origin';
 import { boundedJson } from './request-body';
+import { isProductionDeployment } from './deployment-context';
 
 export const RECORDS_PRIVATE_HEADERS = {
   'Cache-Control':'private, no-store, max-age=0', 'CDN-Cache-Control':'no-store',
@@ -24,9 +25,14 @@ const identifier = (value:unknown, label='record'):string => {
 };
 type Resolver=(request:Request)=>Promise<AccountUser|null>;
 
-export function createRecordsHandlers(options:{records?:RecordsRepository;security?:RequestSecurity;resolveSession?:Resolver}={}) {
+export function createRecordsHandlers(options:{records?:RecordsRepository;security?:RequestSecurity;resolveSession?:Resolver;enabled?:boolean}={}) {
   const records=options.records??recordsRepository,security=options.security??requestSecurity,resolve=options.resolveSession??resolveAccountUser;
+  const enabled=options.enabled??isProductionDeployment();
+  function requireProduction() {
+    if(!enabled)throw new SecurityError('Open records on parkesrummy.com. Preview deployments do not access or change saved records.',409);
+  }
   async function authenticate(request:Request,write:boolean):Promise<AccountUser> {
+    requireProduction();
     if(request.headers.get('Sec-Fetch-Site')==='cross-site'||(write&&!isAllowedRoomWriteOrigin(request))||
       (request.headers.has('Origin')&&!isAllowedRoomWriteOrigin(request)))throw new SecurityError('Open Parkes Rummy directly to continue.',403);
     const user=await resolve(request);
@@ -64,6 +70,7 @@ export function createRecordsHandlers(options:{records?:RecordsRepository;securi
     },
     shared: async(request:Request,token:string):Promise<SharedRecord|Response>=>{
       try {
+        requireProduction();
         await security.check(request,'profile');
         const record=await records.shared(token);
         return record??new Response('This shared record is no longer available.',{status:404,headers:RECORDS_PUBLIC_HEADERS});

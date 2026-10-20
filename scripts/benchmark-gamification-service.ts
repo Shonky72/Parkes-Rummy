@@ -78,7 +78,7 @@ async function benchmark(name:string,work:()=>Promise<unknown>,samples=20){
 }
 const owner=users[0],solo=users.at(-1)!;
 const ownerRequest=()=>new Request('https://parkesrummy.com/api/records',{headers:{Origin:'https://parkesrummy.com','x-nf-client-connection-ip':'192.0.2.199','X-Parkes-Identity':accountMarker(owner.id)}});
-const handler=(repo:RecordsRepository)=>createRecordsHandlers({records:repo,security,resolveSession:async()=>owner});
+const handler=(repo:RecordsRepository)=>createRecordsHandlers({records:repo,security,resolveSession:async()=>owner,enabled:true});
 const warm=handler(records);
 const measurements=[];
 measurements.push(await benchmark('profile API warm summary (200 lifetime hands)',async()=>{const result=await warm.snapshot(ownerRequest());if(result.status!==200)throw new Error(await result.text());return result.json();},12));

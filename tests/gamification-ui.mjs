@@ -87,7 +87,7 @@ function pass(name) { checks.push(name); console.log(`PASS: ${name}`); }
 function isolatedApi(user) {
   const session = { user }, responses = [];
   const resolveSession = async () => session.user;
-  const recordApi = createRecordsHandlers({ records, resolveSession, security });
+  const recordApi = createRecordsHandlers({ records, resolveSession, security, enabled: true });
   const competitionApi = createCompetitionHandlers({ competition, resolveSession, security, enabled: true });
   const ladderApi = createLadderHandlers({ ladder, resolveSession, security, enabled: true });
   const roomApi = createRoomHandlers({ repository: rooms, resolveSession, security, captureRecords: true, configured: () => true,

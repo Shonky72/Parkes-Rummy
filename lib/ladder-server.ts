@@ -4,6 +4,7 @@ import { resolveAccountUser } from './auth';
 import { ACCOUNT_IDENTITY_HEADER, accountMarker, type AccountUser } from './auth-config';
 import { isAllowedRoomWriteOrigin } from './request-origin';
 import { boundedJson } from './request-body';
+import { isProductionDeployment } from './deployment-context';
 
 export const LADDER_PRIVATE_HEADERS = {
   'Cache-Control': 'private, no-store, max-age=0', 'CDN-Cache-Control': 'no-store',
@@ -28,7 +29,7 @@ export function createLadderHandlers(options: {
 } = {}) {
   const ladder = options.ladder ?? ladderRepository, security = options.security ?? requestSecurity;
   const resolve = options.resolveSession ?? resolveAccountUser, now = options.now ?? Date.now;
-  const enabled = options.enabled ?? process.env.CONTEXT === 'production';
+  const enabled = options.enabled ?? isProductionDeployment();
   async function authenticate(request: Request, write: boolean): Promise<AccountUser> {
     // Snapshot creates an account's initial ladder row. Gate both routes before
     // authentication, rate-limit writes or any repository call in a preview.
