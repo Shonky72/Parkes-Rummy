@@ -1,5 +1,8 @@
 -- Additive controlled challenges, private clubs, duels and rematches.
 DO $$ BEGIN
+-- All three releases share this namespace to coordinate cold workers.
+-- The lock releases automatically when this query's transaction ends.
+PERFORM pg_advisory_xact_lock(1346458187,1);
 CREATE TABLE IF NOT EXISTS competition_challenges (
  id text PRIMARY KEY, owner_id text REFERENCES "user"("id") ON DELETE CASCADE,
  kind text NOT NULL CHECK(kind IN ('daily','rule-week','custom','duel')),

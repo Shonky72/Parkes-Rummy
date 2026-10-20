@@ -14,6 +14,12 @@ function identifier(value:unknown,label='competition'):string {
 function failure(error:unknown):Response {
   if(error instanceof SecurityError)return Response.json({error:error.message},{status:error.status,headers:{...RECORDS_PRIVATE_HEADERS,'Retry-After':String(error.retryAfter)}});
   if(error instanceof Error&&error.name==='GameError')return Response.json({error:error.message},{status:400,headers:RECORDS_PRIVATE_HEADERS});
+  // Log fixed categories and validated SQLSTATE only, never the error object,
+  // message, stack, SQL, parameters or account/request data.
+  const code=typeof error==='object'&&error!==null&&'code' in error?error.code:null;
+  const sqlState=typeof code==='string'&&/^[0-9A-Z]{5}$/.test(code)?code:null;
+  const category=sqlState?'database':error instanceof TypeError?'type-error':error instanceof Error?'error':'unknown';
+  console.error('Parkes Rummy competition request failed',{category,sqlState});
   return Response.json({error:'Competition is unavailable for the moment. Reconnect and try again.'},{status:503,headers:RECORDS_PRIVATE_HEADERS});
 }
 export function createCompetitionHandlers(options:{competition?:CompetitionRepository;resolveSession?:Resolver;security?:RequestSecurity;enabled?:boolean}={}) {

@@ -1,5 +1,8 @@
 -- Additive ranked Game 1 schema and account-deletion cleanup.
 DO $$ BEGIN
+-- All three releases share this namespace to coordinate cold workers.
+-- The lock releases automatically when this query's transaction ends.
+PERFORM pg_advisory_xact_lock(1346458187,1);
 CREATE TABLE IF NOT EXISTS ladder_players (
  user_id text PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
  public_id text NOT NULL UNIQUE, rating integer NOT NULL DEFAULT 1000,

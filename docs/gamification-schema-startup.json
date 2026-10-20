@@ -1,0 +1,320 @@
+{
+  "startedAt": "2026-10-20T01:13:43.277Z",
+  "node": "v24.19.0",
+  "kind": "real-postgresql-local-only",
+  "caveat": "Isolated PostgreSQL fixtures. This reproduces a startup race, but the suppressed production SQLSTATE means the production incident cause remains an inference.",
+  "checks": [
+    {
+      "name": "original unguarded DDL reproduces the cross-connection race",
+      "passed": true,
+      "durationMs": 141.48,
+      "backendPids": [
+        25251,
+        25252
+      ],
+      "observedWait": "transactionid",
+      "reproducedError": {
+        "name": "error",
+        "code": "23505",
+        "message": "duplicate key value violates unique constraint \"pg_type_typname_nsp_index\"",
+        "constraint": "pg_type_typname_nsp_index"
+      },
+      "retrySucceeded": true
+    },
+    {
+      "name": "guarded DDL waits before catalog checks and succeeds after commit",
+      "passed": true,
+      "durationMs": 126.41,
+      "backendPids": [
+        25254,
+        25255
+      ],
+      "observedWait": "advisory",
+      "sharedLock": [
+        1346458187,
+        1
+      ],
+      "retrySucceeded": true,
+      "locksRemaining": 0
+    },
+    {
+      "name": "guarded DDL also releases the lock and creates tables after rollback",
+      "passed": true,
+      "durationMs": 122.51,
+      "rollbackReleasedLock": true,
+      "waitingWorkerCreatedSchema": true,
+      "locksRemaining": 0
+    },
+    {
+      "name": "12 cold repository workers initialize all three releases and reinitialize safely",
+      "passed": true,
+      "durationMs": 319.31,
+      "simultaneousWorkers": 12,
+      "firstBackendPids": [
+        25261,
+        25262,
+        25263,
+        25264,
+        25265,
+        25266,
+        25267,
+        25268,
+        25269,
+        25270,
+        25271,
+        25272
+      ],
+      "restartedBackendPids": [
+        25273,
+        25274,
+        25275,
+        25276,
+        25277,
+        25278,
+        25279,
+        25280,
+        25281,
+        25282,
+        25283,
+        25284
+      ],
+      "initialSchemaQueries": [
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        }
+      ],
+      "restartedSchemaQueries": [
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        },
+        {
+          "records": 3,
+          "competition": 1,
+          "ladder": 1
+        }
+      ],
+      "tableCount": 21,
+      "tables": [
+        "competition_attempts",
+        "competition_challenges",
+        "competition_club_weeks",
+        "competition_clubs",
+        "competition_duels",
+        "competition_invitations",
+        "competition_memberships",
+        "competition_rematches",
+        "competition_trophies",
+        "ladder_matches",
+        "ladder_pair_days",
+        "ladder_players",
+        "ladder_queue",
+        "ladder_queue_lock",
+        "ladder_results",
+        "ladder_service_voids",
+        "records_blocks",
+        "records_evidence",
+        "records_friendships",
+        "records_profiles",
+        "records_shares"
+      ],
+      "sameWorkerCacheVerified": true,
+      "existingTablesPreserved": true,
+      "locksRemaining": 0
+    },
+    {
+      "name": "each repository retries on the same instance after a real lock timeout",
+      "passed": true,
+      "durationMs": 640.93,
+      "repositories": [
+        {
+          "repository": "records",
+          "failedSqlstate": "55P03",
+          "sameInstanceRetrySucceeded": true,
+          "locksRemaining": 0
+        },
+        {
+          "repository": "competition",
+          "failedSqlstate": "55P03",
+          "sameInstanceRetrySucceeded": true,
+          "locksRemaining": 0
+        },
+        {
+          "repository": "ladder",
+          "failedSqlstate": "55P03",
+          "sameInstanceRetrySucceeded": true,
+          "locksRemaining": 0
+        }
+      ]
+    }
+  ],
+  "temporaryDatabases": [
+    "parkes_schema_mvfzpbox_5385049e14_unguarded",
+    "parkes_schema_mvfzpbox_5385049e14_guarded",
+    "parkes_schema_mvfzpbox_5385049e14_rollback",
+    "parkes_schema_mvfzpbox_5385049e14_workers",
+    "parkes_schema_mvfzpbox_5385049e14_retries"
+  ],
+  "cleanup": [
+    {
+      "database": "parkes_schema_mvfzpbox_5385049e14_unguarded",
+      "dropped": true
+    },
+    {
+      "database": "parkes_schema_mvfzpbox_5385049e14_guarded",
+      "dropped": true
+    },
+    {
+      "database": "parkes_schema_mvfzpbox_5385049e14_rollback",
+      "dropped": true
+    },
+    {
+      "database": "parkes_schema_mvfzpbox_5385049e14_workers",
+      "dropped": true
+    },
+    {
+      "database": "parkes_schema_mvfzpbox_5385049e14_retries",
+      "dropped": true
+    }
+  ],
+  "schemaSha256": {
+    "records": "14e4863b73e945b9f085fed46f555e32f6e7e300dc5bf51752fa911582eb69b9",
+    "competition": "75b5a9c096c340102d2451083c490cdb40e0d5bf6977a039c01cab38259ba65c",
+    "ladder": "daef18258f70393ed0f3460903b9708e4ccd600f16cc19cebd3372c39dedef46"
+  },
+  "serverVersion": "16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)",
+  "service": {
+    "host": "127.0.0.1",
+    "port": 56743,
+    "credentialsPublished": false
+  },
+  "passed": true,
+  "durationMs": 1366.74,
+  "sourceBaselineCommit": "9ee9ead1bf6271321f3ea8bc311cd54f17d97f3e",
+  "verifiedSourceSha256": {
+    ".github/workflows/ci.yml": "42ce5602a803029277731fc53a61405aaede0276231fd14ecd89f5d55d60c65e",
+    "db/records.ts": "bd98f41d103d6f462e4aab99ca674e0b736fc11eba02b6ab1d7979462df8a000",
+    "db/competition.ts": "960c81acd366c866e059538a534f40d30bf8e8e1a47181a84875281bd811316b",
+    "db/ladder.ts": "bcc93b86a0c0dae5fdb1f741f7328f4f4a752018eeea988191346848e73e03c3",
+    "db/records-migration.sql": "072e6283c9e3f51e5cfb5d7b728b46d2e133b5f973ce1d8494ef1badc7a4f967",
+    "db/competition-migration.sql": "d9ef8404a61b421cb5b8bfbbbec110cabb732cb73cee3d9f3721c8feaeeba734",
+    "db/ladder-migration.sql": "07169e9f602ad1b1b1e91b921d6093c4ce918808b58c4c061741c1f85719be39",
+    "db/schema.sql": "59372efcdb44b77791696b86aac0a65b7c5f352f7ed2400a9a844fe98fc9f0ba",
+    "db/schema-editor.sql": "7b5ca8b9a1ec80fe498743fb6fbdcb5b9d69f9b78527beb8b1b2fc439e170b40",
+    "lib/competition-server.ts": "5827b645c3534c29ee0508d451d5dbb7b2a376a9cb1a49d822e5e1a14063cddd",
+    "tests/schema-startup-postgres.mjs": "4fa0cce14d941d5c170b518c1e88a0a42333c6a807ca2ec265bcc452bb1dfe5c"
+  },
+  "independentCleanupCheck": {
+    "fixtureDatabasesRemaining": 0,
+    "serviceTables": [],
+    "advisoryLocksRemaining": 0
+  }
+}

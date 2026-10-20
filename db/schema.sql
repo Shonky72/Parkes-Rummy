@@ -1,6 +1,8 @@
 -- Parkes Rummy: fresh PostgreSQL database, Better Auth 1.7 core schema.
 -- Safe to run again. This script does not delete or import existing games.
 BEGIN;
+-- Coordinate provisioning with runtime schema initialization.
+SELECT pg_advisory_xact_lock(1346458187,1);
 CREATE TABLE IF NOT EXISTS "user" (
   "id" text PRIMARY KEY, "name" text NOT NULL, "email" text NOT NULL UNIQUE,
   "emailVerified" boolean NOT NULL DEFAULT false, "image" text,
@@ -115,6 +117,9 @@ CREATE INDEX IF NOT EXISTS voice_signals_recipient_idx ON voice_signals(room_cod
 -- Parkes Rummy records, chosen names, friendships and revocable shares.
 -- Additive and repeatable; room deletion never deletes earned evidence.
 DO $$ BEGIN
+-- All three releases share this namespace to coordinate cold workers.
+-- The lock releases automatically when this query's transaction ends.
+PERFORM pg_advisory_xact_lock(1346458187,1);
 CREATE TABLE IF NOT EXISTS records_profiles (
  user_id text PRIMARY KEY REFERENCES "user"("id") ON DELETE CASCADE,
  display_name text NOT NULL DEFAULT 'Player', friend_code text NOT NULL UNIQUE,
@@ -150,6 +155,9 @@ END $$;
 -- Parkes Rummy controlled deals, first attempts, clubs and invitations.
 -- Additive and repeatable; all secret seeds stay in server-private config.
 DO $$ BEGIN
+-- All three releases share this namespace to coordinate cold workers.
+-- The lock releases automatically when this query's transaction ends.
+PERFORM pg_advisory_xact_lock(1346458187,1);
 CREATE TABLE IF NOT EXISTS competition_challenges (
  id text PRIMARY KEY, owner_id text REFERENCES "user"("id") ON DELETE CASCADE,
  kind text NOT NULL CHECK(kind IN ('daily','rule-week','custom','duel')),
@@ -209,6 +217,9 @@ END $$;
 
 -- Additive ranked Game 1 schema and account-deletion cleanup.
 DO $$ BEGIN
+-- All three releases share this namespace to coordinate cold workers.
+-- The lock releases automatically when this query's transaction ends.
+PERFORM pg_advisory_xact_lock(1346458187,1);
 CREATE TABLE IF NOT EXISTS ladder_players (
  user_id text PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
  public_id text NOT NULL UNIQUE, rating integer NOT NULL DEFAULT 1000,
