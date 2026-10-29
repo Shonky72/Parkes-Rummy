@@ -29,12 +29,12 @@ export default function StreakCelebration({ accountId, handId, children }: {
       setView(null);
     });
     const read = async () => {
-      if (closed || pending || checked || document.visibilityState === 'hidden'
+      if (closed || pending || checked || document.hidden
         || !isClientIdentityCurrent(identity)) return;
       pending = true;
       try {
         const summary = await progressRequest<PlayStreakSummary>('/api/play-streak', undefined, controller.signal);
-        if (closed || !isClientIdentityCurrent(identity) || document.visibilityState === 'hidden') return;
+        if (closed || !isClientIdentityCurrent(identity) || document.hidden) return;
         checked = true;
         const award = streakAwardForResult(summary, handId);
         if (award && !streakCelebrationHistory.has(accountId, award)) setView({ accountId, handId, award });
