@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { database, type SqlDatabase } from './index';
 import { SecurityError } from './security';
 import { aggregateRecords, cohortKey } from '../lib/records';
+import { summarizePlayStreak, type PlayCompletionReceipt, type PlayStreakSummary } from '../lib/play-streak';
 import { RULES } from '../lib/rummy';
 import type { RecordConditions, RecordEvidence, RecordsAggregate, RoomRecordEvent } from '../lib/records-types';
 import type { Suit } from '../lib/types';
@@ -132,6 +133,20 @@ export class RecordsRepository {
   async allEvidence(userId: string): Promise<RecordEvidence[]> {
     await this.ensure();
     return (await this.db.query<{payload:RecordEvidence}>('SELECT payload FROM records_evidence WHERE user_id=$1 ORDER BY started_at,hand_id',[userId])).rows.map(r=>r.payload);
+  }
+  /** Read saved completion receipts only; opening the home screen never settles or changes a game. */
+  async playStreak(userId: string, now = Date.now()): Promise<PlayStreakSummary> {
+    await this.ensure();
+    const result = await this.db.query<{receipt:PlayCompletionReceipt}>(`SELECT jsonb_build_object(
+      'gameId',game_id,'handId',hand_id,'status',status,'startedAt',started_at,
+      'finishedAt',payload->'finishedAt','endActionId',payload->'endActionId',
+      'eligible',payload->'eligible','exclusionReason',payload->'exclusionReason',
+      'conditions',jsonb_build_object('format',payload->'conditions'->'format',
+        'singleHand',payload->'conditions'->'singleHand','challengeId',payload->'conditions'->'challengeId'),
+      'gameOutcome',jsonb_build_object('finished',payload->'gameOutcome'->'finished',
+        'observedFromStart',payload->'gameOutcome'->'observedFromStart')) AS receipt
+      FROM records_evidence WHERE user_id=$1 AND status='completed'`,[userId]);
+    return summarizePlayStreak(result.rows.map(row => row.receipt), now);
   }
   async aggregate(userId: string): Promise<RecordsAggregate> {
     await this.ensure();
@@ -304,3 +319,4 @@ export const recordsRepository = new RecordsRepository();
 /** Used only inside an already-open room transaction (initial quick-play deal). */
 export function recordEventValues(events: RoomRecordEvent[]): string { return JSON.stringify(events); }
 export { cohortKey };
+

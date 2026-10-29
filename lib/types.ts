@@ -75,6 +75,8 @@ export interface PublicRoom {
     handId: string; openingTurn: number | null; firstLegalTurn: number | null;
     opportunitiesPassed: number; achievements: string[];
   };
+  /** Owner-only finished game identifier; the streak service verifies any daily award. */
+  completedPlay?: { handId: string };
   /** Present only on new single-hand Quick Play rooms; old saves retain normal progression. */
   quickPlay?: { ruleNumber: number };
   code: string; hostId: string; game: GameType; round: number;
@@ -131,3 +133,4 @@ export type GameAction =
   | { type: 'discard'; cardId: string };
 
 export type InvitationPreview=Omit<RoomPreview,'hostName'|'players'>;
+

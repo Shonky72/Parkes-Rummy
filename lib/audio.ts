@@ -1,6 +1,7 @@
 "use client";
 
 import { createMusicPlaylist } from "./music-playlist";
+import { STREAK_CELEBRATION_TIMING } from "./streak-celebration";
 
 /** Sound stays local to this browser. No requests or audio assets are needed for effects. */
 export type SoundName =
@@ -56,6 +57,7 @@ const lastPlayed = new Map<SoundName, number>();
 let activeEffects: number[] = [];
 let pageActive = true;
 let resumeMusicAfterPage = false;
+let stopStreakSound: (() => void) | null = null;
 
 const COOLDOWN: Record<SoundName, number> = {
   click: 75,
@@ -505,3 +507,80 @@ export function playSound(name: SoundName): void {
       break;
   }
 }
+
+/** Tune the celebration independently from card sounds and background music. */
+export const STREAK_FANFARE = Object.freeze({
+  buildNotes: [392, 440, 523.25, 587.33, 659.25, 783.99],
+  buildOffsetsMs: [180, 820, 1_410, 1_930, 2_380, 2_700],
+  landingNotes: [523.25, 659.25, 783.99, 1_046.5],
+  buildLevel: 0.105,
+  landingLevel: 0.12,
+  landingDurationMs: 720,
+});
+
+/** Returns a real stop handle, including already-scheduled notes. No autoplay backlog. */
+export function playStreakFanfare(reducedMotion = false): () => void {
+  const noop = () => {};
+  if (typeof window === 'undefined' || document.visibilityState === 'hidden' || !pageActive) return noop;
+  loadSettings();
+  if (settings.muted || settings.volume <= 0 || !userGestureSeen) return noop;
+  const audio = getContext();
+  if (!audio || !master || audio.state !== 'running') return noop;
+  stopStreakSound?.();
+  const output = audio.createGain();
+  output.gain.value = 1;
+  output.connect(master);
+  const sources: OscillatorNode[] = [];
+  const envelopes: GainNode[] = [];
+  let stopped = false;
+  let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    if (cleanupTimer !== undefined) clearTimeout(cleanupTimer);
+    window.removeEventListener('pagehide', stop);
+    window.removeEventListener(SETTINGS_EVENT, settingsChanged);
+    document.removeEventListener('visibilitychange', visibilityChanged);
+    // Disconnect the dedicated bus first, so scheduled or ringing notes stop immediately.
+    output.disconnect();
+    for (const source of sources) {
+      try { source.stop(); } catch { /* A naturally ended oscillator is already silent. */ }
+      source.disconnect();
+    }
+    for (const envelope of envelopes) envelope.disconnect();
+    if (stopStreakSound === stop) stopStreakSound = null;
+  };
+  const settingsChanged = () => { if (settings.muted || settings.volume <= 0) stop(); };
+  const visibilityChanged = () => { if (document.visibilityState === 'hidden') stop(); };
+  stopStreakSound = stop;
+  window.addEventListener('pagehide', stop);
+  window.addEventListener(SETTINGS_EVENT, settingsChanged);
+  document.addEventListener('visibilitychange', visibilityChanged);
+  const start = audio.currentTime + 0.005;
+  const note = (frequency: number, offsetMs: number, durationMs: number, level: number) => {
+    const source = audio.createOscillator();
+    const envelope = audio.createGain();
+    sources.push(source); envelopes.push(envelope);
+    const at = start + offsetMs / 1_000;
+    const duration = durationMs / 1_000;
+    source.type = 'sine';
+    source.frequency.setValueAtTime(frequency, at);
+    envelope.gain.setValueAtTime(0.0001, at);
+    envelope.gain.linearRampToValueAtTime(level, at + 0.012);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+    source.connect(envelope); envelope.connect(output);
+    source.start(at); source.stop(at + duration + 0.02);
+  };
+  try {
+    if (!reducedMotion) STREAK_FANFARE.buildNotes.forEach((frequency, index) => {
+      note(frequency, STREAK_FANFARE.buildOffsetsMs[index], 320, STREAK_FANFARE.buildLevel);
+    });
+    const landing = reducedMotion ? 0 : STREAK_CELEBRATION_TIMING.landingMs;
+    STREAK_FANFARE.landingNotes.forEach((frequency, index) => {
+      note(frequency, landing + index * 45, STREAK_FANFARE.landingDurationMs, STREAK_FANFARE.landingLevel);
+    });
+    cleanupTimer = setTimeout(stop, landing + 1_100);
+  } catch { stop(); }
+  return stop;
+}
+

@@ -627,6 +627,7 @@ export function publicRoom(original: RoomState, youId: string): PublicRoom {
   const room = normalizeRoomProgression(original);
   const own = room.players.find(player => player.id === youId);
   const completedRecord = completedRecordFor(room, youId);
+  const completedPlay = completedPlayFor(room, youId);
   return {
     code: room.code, hostId: room.hostId, game: room.game, round: room.round, status: room.status,
     ...(room.quickPlay ? { quickPlay: { ...room.quickPlay } } : {}),
@@ -641,7 +642,17 @@ export function publicRoom(original: RoomState, youId: string): PublicRoom {
     result: room.result, history: room.history, events: room.events, version: room.version, botDueAt: room.botDueAt,
     updatedAt: room.updatedAt, lastMoveAt: lastMoveAtFor(room),
     ...(completedRecord ? { completedRecord } : {}),
+    ...(completedPlay ? { completedPlay } : {}),
   };
+}
+
+/** Share only a minimal finished-hand highlight; private observations stay private. */
+export function completedPlayFor(room: RoomState, youId: string): PublicRoom['completedPlay'] | undefined {
+  if (room.status !== 'finished' || !room.result) return undefined;
+  const evidence = room.records?.current[youId];
+  if (evidence?.status !== 'completed' || evidence.handId !== room.records?.handId
+    || !room.result.scores.some(row => row.playerId === youId)) return undefined;
+  return { handId: evidence.handId };
 }
 
 /** Share only a minimal finished-hand highlight; private observations stay private. */
@@ -1444,3 +1455,4 @@ export function chooseBotAction(view: PublicRoom, difficulty: Difficulty = 'medi
   }
   return { type: 'discard', cardId: bestDiscard(view, difficulty).id };
 }
+

@@ -58,6 +58,8 @@ jobs:
         run: node --import tsx --test tests/advertising.test.ts tests/monetization.test.ts
       - name: Verify records, frozen challenges, clubs and ranked integrity
         run: node --import tsx --test tests/deployment-context.test.ts tests/client-identity.test.ts tests/records-engine.test.ts tests/records-api.test.ts tests/records-room-api.test.ts tests/competition.test.ts tests/competition-api.test.ts tests/ladder-api.test.ts
+      - name: Verify finished-game streak credit and one-time celebrations
+        run: node --import tsx --test tests/play-streak.test.ts tests/play-streak-api.test.ts tests/play-streak-repository.test.ts tests/streak-celebration.test.ts tests/streak-audio.test.ts tests/audio-playback.test.ts
       - run: node tests/activity-fixture.mjs && npm run build
       - run: rm -rf app/__activity_ui_fixture
       - name: Verify public content and discovery without JavaScript
@@ -175,3 +177,4 @@ jobs:
           path: install-ui-results/
           if-no-files-found: ignore
           retention-days: 7
+

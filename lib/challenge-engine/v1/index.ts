@@ -1,4 +1,4 @@
-import { completedRecordFor, enableRecords, observeRecordsAction } from '../../rummy';
+import { completedPlayFor, completedRecordFor, enableRecords, observeRecordsAction } from '../../rummy';
 import { CHALLENGE_ENGINE_VERSION } from '../../competition-types';
 import type {
   ChallengeConfig, ChallengeRoom, PublicChallengeInfo, PublicChallengeRoom,
@@ -171,5 +171,7 @@ export function publicChallengeRoom(room: RoomState, youId: string): PublicChall
   if (youId !== room.challenge.humanPlayerId) throw new ChallengeError('This challenge belongs to another player.', 'NOT_IN_ROOM');
   const { engine } = engineFor(room.challenge.config, room.challenge.randomCursor, room.updatedAt);
   const completedRecord = completedRecordFor(room, youId);
-  return { ...engine.publicRoom(room, youId), challenge: publicChallengeInfo(room), ...(completedRecord ? { completedRecord } : {}) };
+  const completedPlay = completedPlayFor(room, youId);
+  return { ...engine.publicRoom(room, youId), challenge: publicChallengeInfo(room), ...(completedRecord ? { completedRecord } : {}), ...(completedPlay ? { completedPlay } : {}) };
 }
+
