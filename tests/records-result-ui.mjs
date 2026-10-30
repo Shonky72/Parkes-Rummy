@@ -9,6 +9,9 @@ import { accountMarker, ACCOUNT_IDENTITY_HEADER } from '../lib/auth-config.ts';
 import { applyAction, createDeck, createPlayer, createRoom, enableRecords, getRuleExample, observeRecordsAction, publicRoom } from '../lib/rummy.ts';
 import { handRevealDuration } from '../lib/hand-reveal.ts';
 import { ROOM_PROTOCOL, ROOM_PROTOCOL_HEADER } from '../lib/room-protocol.ts';
+import { createPlayStreakHandler } from '../lib/play-streak-server.ts';
+import { summarizePlayStreak } from '../lib/play-streak.ts';
+import { STREAK_CELEBRATION_TIMING } from '../lib/streak-celebration.ts';
 
 // Local production UI, real room authorization/action handlers and real record
 // observers. Only the external session provider and storage are substituted.
@@ -93,6 +96,13 @@ function isolatedApi(room) {
   };
   const handlers = createRoomHandlers({ repository, resolveSession, captureRecords: true, configured: () => true,
     security: { check: async () => {} }, entitlements: async () => entitlements, profile: async () => profile });
+  const readPlayStreak = createPlayStreakHandler({ enabled: true, resolveSession, security: { check: async () => {} },
+    records: { async playStreak(userId, now) {
+      const member = saved.memberships.find(member => member.userId === userId);
+      const evidence = member && saved.room.records?.current[member.playerId];
+      return summarizePlayStreak(evidence ? [evidence] : [], now);
+    } },
+  });
   const respond = data => Response.json(data, { headers: { [ROOM_PROTOCOL_HEADER]: ROOM_PROTOCOL } });
   return { requests, results, errors, getRoom: () => saved.room, handlers,
     async handle(request) {
@@ -101,6 +111,7 @@ function isolatedApi(room) {
       if (path === '/api/account/session') return respond({ configured: true, user: await resolveSession(request), entitlements, profile, accessAdmin: false });
       if (path === '/api/activity/presence') return new Response(null, { status: 204 });
       if (path === '/api/account/games') return respond({ games: [] });
+      if (path === '/api/play-streak') return readPlayStreak(request);
       if (path === '/api/rooms/summaries') return respond({ summaries: [] });
       if (path === `${prefix}/join-requests`) return respond({ requests: [] });
       if (path === `${prefix}/preview`) return handlers.roomPreviewRequest(request, room.code);
@@ -143,7 +154,7 @@ async function mount(context, api) {
 
 async function watchReveal(page) {
   await page.evaluate(() => {
-    const audit = window.recordsResultAudit = { frames: 0, firstFlightAt: null, firstFlipAt: null, firstHighlightAt: null, violations: [], transitions: [] };
+    const audit = window.recordsResultAudit = { frames: 0, firstFlightAt: null, firstFlipAt: null, firstHighlightAt: null, firstAwardAt: null, violations: [], transitions: [] };
     let previous = '', running = true;
     const sample = () => {
       const at = performance.now();
@@ -151,9 +162,11 @@ async function watchReveal(page) {
       const flipping = !!document.querySelector('.opponent .end-hand-flipping');
       const modal = !!document.querySelector('.result-modal');
       const highlight = !!document.querySelector('.record-result-highlight');
+      const award = !!document.querySelector('.streak-award');
       if (flight && audit.firstFlightAt === null) audit.firstFlightAt = at;
       if (flipping && audit.firstFlipAt === null) audit.firstFlipAt = at;
       if (highlight && audit.firstHighlightAt === null) audit.firstHighlightAt = at;
+      if (award && audit.firstAwardAt === null) audit.firstAwardAt = at;
       if ((highlight || modal) && (flight || flipping)) audit.violations.push({ at, flight, flipping, modal, highlight });
       const state = JSON.stringify({ flight, flipping, modal, highlight });
       if (state !== previous) { audit.transitions.push({ at, flight, flipping, modal, highlight }); previous = state; }
@@ -210,11 +223,22 @@ try {
       `${screen.name}: opponent rail ${dimension} moved ${before[dimension]} → ${after[dimension]}`);
     await page.screenshot({ path: `${output}/${screen.name}-revealing.png` });
 
+    const award = page.locator('.streak-award');
+    await award.waitFor({ timeout: 7000 });
+    assert.match(await award.textContent(), /Today’s streak earned!/);
+    assert.deepEqual(await award.locator('.streak-award-reel > span').allTextContents(), ['0', '1']);
+    assert.equal(await page.locator('.record-result-highlight').count(), 0, 'The streak celebration replaces the result content until continued');
+    await page.locator('.streak-award-complete').waitFor({ timeout: STREAK_CELEBRATION_TIMING.messageMs + 2000 });
+    assert.match(await award.locator('.streak-award-tomorrow').textContent(), /Come back tomorrow to continue your streak/);
+    await page.screenshot({ path: `${output}/${screen.name}-streak.png` });
+    await award.getByRole('button', { name: 'Continue', exact: true }).click();
     const highlight = page.getByRole('region', { name: 'Your hand record', exact: true });
     await highlight.waitFor({ timeout: 7000 });
     const audit = await page.evaluate(() => window.finishRecordsResultAudit());
     assert.deepEqual(audit.violations, [], `${screen.name}: results appeared during the winning flight or card flip`);
     assert.ok(audit.firstFlightAt !== null && audit.firstFlipAt !== null && audit.firstHighlightAt !== null);
+    assert.ok(audit.firstAwardAt !== null && audit.firstAwardAt - audit.firstFlipAt >= handRevealDuration(api.getRoom()) - 80,
+      `${screen.name}: streak celebration appeared before the card reveal completed`);
     assert.ok(audit.frames > 10, 'The animation must run rather than taking the reduced-motion bypass');
     assert.ok(audit.firstHighlightAt - audit.firstFlipAt >= handRevealDuration(api.getRoom()) - 80,
       `${screen.name}: the earned highlight appeared before the full flip and reveal hold completed`);
@@ -227,6 +251,7 @@ try {
     assert.equal(finalResponse.payload.room.status, 'finished');
     assert.equal(finalResponse.payload.room.youId, 'owner-seat');
     assert.equal(finalResponse.payload.room.records, undefined);
+    assert.deepEqual(finalResponse.payload.room.completedPlay, { handId: room.records.handId }, 'The streak receives only the authenticated finished hand identifier');
     assert.equal(completed.handId, room.records.handId);
     assert.equal(completed.openingTurn, 2); assert.equal(completed.firstLegalTurn, 2); assert.equal(completed.opportunitiesPassed, 0);
     for (const badge of ['born-ready', 'first-chance', 'natural-talent']) assert.ok(completed.achievements.includes(badge), badge);
@@ -263,6 +288,17 @@ try {
     assert.ok(reviewBounds && reviewBounds.y >= -1 && reviewBounds.y + reviewBounds.height <= screen.height + 1, 'The hand review link is reachable within the phone viewport');
     await page.screenshot({ path: `${output}/${screen.name}-record.png`, fullPage: true });
 
+    // Opening the same authoritative result again must not repeat a daily award.
+    await page.locator('.result-modal').getByRole('button', { name: 'Close dialog', exact: true }).click();
+    const reopenedRead = page.waitForResponse(response => new URL(response.url()).pathname === '/api/play-streak');
+    await page.getByRole('button', { name: 'Hand results', exact: true }).click();
+    await (await reopenedRead).finished();
+    await highlight.waitFor();
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(await page.locator('.streak-award').count(), 0, 'Reopening results must not replay the earned streak');
+    assert.equal(await page.evaluate(id => localStorage.getItem(`parkes-rummy:streak-celebration:v1:${encodeURIComponent(id)}`), owner.id),
+      summarizePlayStreak([api.getRoom().records.current['owner-seat']]).today);
+
     for (const identity of ['guest', accountMarker(outsider.id)]) {
       const denied = await api.handlers.readRoomRequest(new Request(`${base}/api/rooms/${room.code}`, { headers: {
         [ACCOUNT_IDENTITY_HEADER]: identity,
@@ -274,8 +310,9 @@ try {
     assert.deepEqual(api.errors, [], `${screen.name}: isolated API errors`);
     checks.push({ screen: screen.name, width: screen.width, authoritativeCompletedRecord: true, openingTurn: completed.openingTurn,
       earned: completed.achievements, identity: 'authenticated member', noPrematureHighlight: true, fullRevealMilliseconds: Math.round(audit.firstHighlightAt - audit.firstFlipAt),
-      unchangedOpponentRail: true, reviewLink: true, noHorizontalOverflow: true, noAutomaticShare: true, audit, geometry });
-    console.log(`PASS: ${screen.name} authenticated result highlight, reveal gate, earned text, review link and geometry`);
+      unchangedOpponentRail: true, reviewLink: true, noHorizontalOverflow: true, noAutomaticShare: true,
+      firstDailyStreakCelebrated: true, noStreakReplay: true, audioSetting: 'muted', audit, geometry });
+    console.log(`PASS: ${screen.name} authenticated daily streak and record highlight, reveal gate, once-only celebration and geometry`);
     await context.close();
   }
   await writeFile(`${output}/checks.json`, JSON.stringify({ checks, fixtureOnly: true, buildId: (await readFile('.next/BUILD_ID', 'utf8')).trim() }, null, 2));
@@ -286,3 +323,4 @@ try {
 } finally {
   await browser?.close(); server.kill('SIGTERM'); log.end();
 }
+

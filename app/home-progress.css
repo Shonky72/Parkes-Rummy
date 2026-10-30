@@ -1,0 +1,22 @@
+.parkes-app .home-play-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.parkes-app .home-play-tabs > button { min-width: 0; padding-left: 5px; padding-right: 5px; white-space: normal; overflow-wrap: normal; }
+.home-progress { min-width: 0; padding: 1px 0 4px; }
+.home-progress-intro h3 { margin: 0 0 5px; color: var(--gold-light); font-size: 22px; }
+.home-progress-intro p, .home-progress-signin { margin: 0 0 12px; color: #c7d9ce; font-size: 13px; line-height: 1.5; }
+.home-progress-signin { color: var(--gold-light); }
+.home-progress .home-streak { margin-top: 0; }
+.home-progress-links { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.home-progress-links > a { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 70px; padding: 12px; border: 1px solid #a1b6a74d; border-radius: 12px; background: #082a2070; color: var(--gold); text-decoration: none; }
+.home-progress-links > a:hover, .home-progress-links > a:focus-visible { border-color: var(--gold); background: #efc36812; }
+.home-progress-links > a:focus-visible { outline: 2px solid var(--aqua); outline-offset: 2px; }
+.home-progress-links > a > svg { flex-shrink: 0; }
+.home-progress-links > a > svg:last-child { margin-left: auto; }
+.home-progress-links > a > span { min-width: 0; }
+.home-progress-links strong { display: block; font-size: 15px; line-height: 1.3; color: var(--ivory); }
+.home-progress-links small { display: block; margin-top: 3px; color: #b9cec2; font-size: 12px; line-height: 1.4; }
+.home-progress-help { display: inline-block; margin: 15px 0 0; color: var(--aqua); text-decoration: underline; font-size: 12px; line-height: 1.5; }
+@media (max-width: 380px) {
+  .parkes-app .home-play-tabs { gap: 2px; }
+  .parkes-app .home-play-tabs > button { font-size: 11px; padding: 9px 3px; }
+  .home-progress-links > a { gap: 9px; padding: 11px 9px; }
+}

@@ -1,0 +1,114 @@
+.streak-award {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 24px 12px 16px;
+  text-align: center;
+  color: #fff6dc;
+  min-height: 420px;
+}
+.streak-award-flame {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  border: 1px solid rgb(234 195 98 / 55%);
+  border-radius: 50%;
+  background: radial-gradient(circle, #a77b293f, #153e30 75%);
+  color: #edcb74;
+}
+.streak-award-kicker { margin: 15px 0 8px; color: #d3d9c6; font-size: 13px; }
+.streak-award h3 { margin: 0; color: #f7dfa1; font-size: clamp(24px, 5vw, 33px); line-height: 1.2; }
+.streak-award h3:focus { outline: none; }
+.streak-award-counter {
+  position: relative;
+  width: 180px;
+  height: 132px;
+  margin: 19px auto 0;
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid rgb(235 202 121 / 30%);
+  background: radial-gradient(ellipse, #e4b95120, #071e1790 76%);
+  font-variant-numeric: tabular-nums;
+}
+.streak-award-reel { transform: translateY(0); }
+.streak-award-reel > span {
+  height: 132px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 96px;
+  line-height: 1;
+  font-weight: 800;
+  color: #ffe6a8;
+  text-shadow: 0 0 24px #f6cf7040;
+}
+.streak-award-roll .streak-award-reel { animation: streak-number-roll var(--streak-roll-ms) cubic-bezier(.48, 0, .25, 1) forwards; }
+.streak-award-landed .streak-award-reel,
+.streak-award-complete .streak-award-reel { transform: translateY(-132px); }
+.streak-award-landed .streak-award-counter { animation: streak-number-pop 650ms cubic-bezier(.18, .8, .3, 1.2) both; }
+.streak-award-tick {
+  position: absolute;
+  bottom: 8px;
+  right: 9px;
+  color: #9fe5ac;
+  opacity: 0;
+  transform: scale(.3);
+}
+.streak-award-landed .streak-award-tick,
+.streak-award-complete .streak-award-tick { opacity: 1; transform: scale(1); transition: transform 450ms, opacity 200ms; }
+.streak-award-unit { margin: 8px 0 12px; color: #ebd395; font-size: 15px; font-weight: 700; }
+.streak-award-message {
+  min-height: 25px;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  color: #f4e0ad;
+  font-size: 14px;
+  font-weight: 600;
+}
+.streak-award-tomorrow { margin: 10px 0 20px; color: #d3e1d2; font-size: 14px; opacity: 0; transition: opacity 450ms; }
+.streak-award-tomorrow.ready { opacity: 1; }
+.streak-award-continue { margin: 0 auto; min-height: 46px; width: min(100%, 270px); justify-content: center; gap: 10px; }
+.streak-award-sparkles { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: -1; }
+.streak-award-sparkles i {
+  position: absolute;
+  left: calc(8% + var(--spark-index) * 7.5%);
+  top: 47%;
+  width: 5px;
+  height: 11px;
+  border-radius: 2px;
+  background: #eac978;
+  opacity: 0;
+  transform: rotate(calc(var(--spark-index) * 31deg));
+}
+.streak-award-landed .streak-award-sparkles i { animation: streak-gold-pop 650ms ease-out both; }
+@keyframes streak-number-roll {
+  0% { transform: translateY(0); }
+  22% { transform: translateY(8px); }
+  78% { transform: translateY(-140px); }
+  100% { transform: translateY(-132px); }
+}
+@keyframes streak-number-pop {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 #edcf8050; }
+  40% { transform: scale(1.13); box-shadow: 0 0 40px 10px #edcf8040; }
+  100% { transform: scale(1); box-shadow: 0 0 28px 2px #edcf8025; }
+}
+@keyframes streak-gold-pop {
+  0% { opacity: 0; translate: 0 0; }
+  20% { opacity: .95; }
+  100% { opacity: 0; translate: 0 -115px; rotate: 100deg; }
+}
+.streak-award-reduced *, .streak-award-reduced *::before, .streak-award-reduced *::after { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .streak-award *, .streak-award *::before, .streak-award *::after { animation: none !important; transition: none !important; }
+  .streak-award-sparkles { display: none; }
+}
+@media (max-width: 380px) {
+  .streak-award { padding: 18px 4px 12px; }
+  .streak-award-counter { width: 155px; }
+  .streak-award-message { font-size: 13px; }
+}

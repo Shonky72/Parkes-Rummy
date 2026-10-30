@@ -15,6 +15,16 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 let browser, currentPage;
 const results = [];
 const user = { id: 'footer-ui-player', name: 'Dan Schonberg', email: 'footer@example.test', image: null };
+const todayParts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+const dayPart = type => todayParts.find(part => part.type === type).value;
+const today = `${dayPart('year')}-${dayPart('month')}-${dayPart('day')}`;
+function dailySnapshot(item) {
+  const completed = item.completed;
+  return { calendar: { day: today }, daily: { challengeId: 'home-daily-fixture', token: 'daily-fixture', game: 1, ruleNumber: 1, title: 'Two sets of three', firstAttemptAvailable: !completed }, attempts: completed ? [{ challengeId: 'home-daily-fixture', scored: true, status: 'completed', practice: false }] : [] };
+}
+function streakSnapshot(item) {
+  return { today, timeZone: 'Australia/Sydney', current: item.completed ? 3 : 0, best: item.completed ? 5 : 0, completedToday: item.completed, completedDays: item.completed ? [today] : [], todayFirstHandId: item.completed ? 'finished-fixture' : null, todayFirstCompletedAt: item.completed ? Date.now() - 1000 : null };
+}
 function account(signed) { return { configured: true, user: signed ? user : null, entitlements: { removeAds: signed, premiumFonts: false, premiumSymbols: false, voiceChat: false, originalRules: false }, profile: { font: 'default', symbol: 'initials' }, accessAdmin: false }; }
 const fixedSelectors = ['.home-header', '.home-hero', '.hero-title', '.hero-card-fan', '.start-panel', '.start-panel > h2', '.account-controls', '.home-play-tabs', '.home-information-footer', '.home-information-footer .developer-wordmark', '.home-information-footer .site-links'];
 async function geometry(page) {
@@ -59,10 +69,27 @@ try {
       if (url.origin !== new URL(base).origin) return route.abort();
       if (url.pathname === '/api/account/session') return route.fulfill({ json: account(item.signed) });
       if (url.pathname === '/api/account/games') return route.fulfill({ json: { games: [] } });
+      if (url.pathname === '/api/competition') return route.fulfill({ json: dailySnapshot(item) });
+      if (url.pathname === '/api/play-streak') return route.fulfill({ json: streakSnapshot(item) });
       return route.continue();
     });
     await page.goto(base, { waitUntil: 'domcontentloaded' });
     await page.locator('.home-information-footer').waitFor({ state: 'visible' });
+    if (item.signed) {
+      await page.getByText(item.completed ? 'Today complete' : 'Start your streak today', { exact: true }).waitFor();
+      assert.equal(await page.locator('.home-daily-unplayed').count(), item.completed ? 0 : 1, 'Daily prompt reflects an attempt independently of account sign-in');
+      assert.equal(await page.locator('.home-streak-week li').count(), 7, 'All seven streak days are visible');
+      assert.equal(await page.locator('.home-streak-week li.is-complete').count(), item.completed ? 1 : 0);
+      if (!item.completed) assert.equal(await page.locator('.home-daily-button').evaluate(el => getComputedStyle(el).animationName), 'none', 'Reduced motion keeps a static daily highlight');
+    } else {
+      await page.getByText('Sign in to save your streak across devices.', { exact: false }).waitFor();
+      assert.equal(await page.locator('.home-streak-week').count(), 0, 'Guests do not see fabricated saved progress');
+    }
+    const actionOrder = await page.locator('.home-tab-content').evaluate(el => {
+      const create = el.querySelector('.create-button'), quick = el.querySelector('.quick-play-button'), daily = el.querySelector('.home-daily-button');
+      return Boolean(create.compareDocumentPosition(quick) & Node.DOCUMENT_POSITION_FOLLOWING) && Boolean(quick.compareDocumentPosition(daily) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    assert.equal(actionOrder, true, 'Play actions stay in Create, Quick Play, Daily Challenge order');
     await page.waitForTimeout(200);
     const shell = await geometry(page);
     const info = await page.evaluate(() => {
@@ -110,10 +137,18 @@ try {
     }
     await page.screenshot({ path: `${output}/${item.name}.png` });
     const nav = page.locator('.home-play-tabs');
-    for (const tab of ['Your Games', 'Store', 'Play']) {
+    for (const tab of ['Your Games', 'Progress', 'Store', 'Play']) {
       await nav.getByRole('button', { name: tab, exact: true }).click();
       await page.waitForTimeout(100);
       sameShell(shell, await geometry(page), `${item.name} / ${tab}`);
+      if (tab === 'Progress') {
+        const content = page.locator('.home-tab-content');
+        for (const destination of ['/profile?tab=achievements', '/ladder', '/competition?tab=clubs']) {
+          assert.equal(await content.locator(`a[href="${destination}"]`).count(), 1, `Progress directly exposes ${destination}`);
+        }
+        assert.equal(await page.locator('.home-daily-button').count(), 0, 'Daily Challenge retains its dedicated Play action');
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'Progress does not overflow the phone');
+      }
       if (item.width > 850) assert.equal(await page.evaluate(() => scrollY), 0, 'Desktop must not jump during tab selection');
       if (item.name === 'desktop-screenshot') await page.screenshot({ path: `${output}/desktop-${tab.replace(/ /g, '-').toLowerCase()}.png` });
     }
@@ -149,3 +184,4 @@ try {
   try { await currentPage?.screenshot({ path: `${output}/failure.png`, fullPage: true }); } catch {}
   throw error;
 } finally { await browser?.close(); server?.kill('SIGTERM'); log.end(); }
+

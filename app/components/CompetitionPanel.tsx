@@ -6,8 +6,7 @@ import type { AttemptPreview, ChallengeDescriptor, CompetitionRepository } from 
 import type { RecordsRepository } from '../../db/records';
 import type { ChallengeScore } from '../../lib/competition-types';
 import type { Difficulty, GameType } from '../../lib/types';
-import { rememberSeat } from '../../lib/client';
-import { getClientIdentity } from '../../lib/client-identity';
+import { openCompetitionRoom } from '../../lib/competition-client';
 import { copyProgressLink, progressRequest } from '../../lib/progress-client';
 import { sharedConditionLines } from '../../lib/record-condition-label';
 import { AccountControls, AccountLoading, useAccountSession } from './AccountControls';
@@ -21,11 +20,11 @@ type Duel = Awaited<ReturnType<CompetitionRepository['duel']>>;
 type Rematch = Awaited<ReturnType<CompetitionRepository['rematch']>>;
 type Comparison = Awaited<ReturnType<RecordsRepository['comparison']>>;
 type AttemptResult = Awaited<ReturnType<CompetitionRepository['reserveAttempt']>>;
-type Tab = 'daily' | 'deals' | 'clubs' | 'duels' | 'rematches';
+type Tab = 'daily' | 'rule-week' | 'deals' | 'clubs' | 'duels' | 'rematches';
 type Props = { initialTab?: string; duelToken?: string; rematchToken?: string };
 type ActionResult = { challenge?: ChallengeDescriptor; club?: { id: string }; duel?: Duel; rematch?: Rematch; roomCode?: string | null; room?: AttemptResult['room']; attempt?: AttemptPreview; resumed?: boolean };
 type Mutate = (action: string, values?: Record<string, unknown>, message?: string) => Promise<void>;
-const tabs: { key: Tab; label: string }[] = [{ key: 'daily', label: 'Daily deal' }, { key: 'deals', label: 'My deals' }, { key: 'clubs', label: 'Clubs' }, { key: 'duels', label: 'Three-deal duels' }, { key: 'rematches', label: 'Rematches' }];
+const tabs: { key: Tab; label: string }[] = [{ key: 'daily', label: 'Daily deal' }, { key: 'rule-week', label: 'Rule of the Week' }, { key: 'deals', label: 'My deals' }, { key: 'clubs', label: 'Clubs' }, { key: 'duels', label: 'Three-deal duels' }, { key: 'rematches', label: 'Rematches' }];
 const gameName = (game: number) => game === 4 ? 'Original Rules' : `Game ${game}`;
 const points = (value: number | null | undefined) => value === null || value === undefined ? 'Excluded' : new Intl.NumberFormat('en-AU').format(value);
 const date = (value: number) => new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Sydney', dateStyle: 'medium' }).format(value);
@@ -34,12 +33,7 @@ const ruleName = (id: string) => { const [game, rule] = id.split(':'); return `$
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Please reconnect and try again.';
 const isAbort = (error: unknown) => error instanceof Error && error.name === 'AbortError';
 
-/** The server has already created and authenticated this account's seat. */
-export function openCompetitionRoom(roomCode: string) {
-  const identity = getClientIdentity();
-  if (!identity.ready || !identity.accountId || !rememberSeat(roomCode, identity.key)) throw new Error('Your account changed. Refresh before opening this table.');
-  window.location.assign(`/join/${encodeURIComponent(roomCode)}`);
-}
+export { openCompetitionRoom } from '../../lib/competition-client';
 
 export function ChallengeScoreSummary({ score, value, label = 'Your result' }: { score: ChallengeScore; value?: number | null; label?: string }) {
   if (score.outcome === 'service-interrupted') return <div className="competition-result"><strong>{label}: service interruption</strong><p>This attempt is excluded from points. Its first-attempt reservation remains recorded.</p></div>;
@@ -188,6 +182,7 @@ function SignedCompetition({ initialTab = '', duelToken = '', rematchToken = '' 
         <div className="progress-challenge-grid">{challengeCard(data.daily)}<section className="panel progress-section"><p className="progress-eyebrow">A week of chances</p><h2><Trophy size={23}/>Your Weekly Best Five</h2><p>Your best five daily first attempts count. A missed day contributes zero. Equal totals share a place.</p><div className="progress-stat-grid competition-two-stats"><Stat label="Counted points" value={points(data.weekly.points)}/><Stat label="Counted days" value={`${data.weekly.countedDays.length}/5`}/><Stat label="Settled daily attempts" value={data.weekly.attempts}/><Stat label="Openings completed" value={data.weekly.completions}/></div><div className="competition-week" aria-label="Days included in your current total">{data.calendar.weekDays.map(day => <div key={day} className={data.weekly.countedDays.includes(day) ? 'counted' : ''}><span>{new Intl.DateTimeFormat('en-AU', { weekday: 'short', timeZone: 'Australia/Sydney' }).format(new Date(`${day}T12:00:00Z`))}</span><strong>{data.weekly.countedDays.includes(day) ? 'Counted' : day > data.calendar.day ? 'Upcoming' : 'Not counted'}</strong></div>)}</div><p className="progress-note">Current week is provisional. Completed results, withdrawals and service interruptions remain visible in My deals.</p><button type="button" className="button outline" onClick={() => setTab('clubs')}><Users size={17}/>Open your club standings</button></section></div>
         {challengeCard(data.ruleWeek)}
       </>}
+      {tab === 'rule-week' && challengeCard(data.ruleWeek)}
       {tab === 'deals' && <>
         <CreateDeal originalRules={data.originalRules} catalog={profile?.summary.rules ?? []} busy={!!busy} onCreate={values => { void mutate('createChallenge', values, 'Your private deal is ready. Complete your first attempt to make a Beat My Deal invitation.'); }}/>
         {shared && <section className="panel progress-section competition-share" aria-label="Your new Beat My Deal link"><h2><Share2 size={23}/>Beat My Deal</h2><p>This public invitation shows your chosen name, the rule and your completed target. Everyone plays the same initial deal.</p><ChallengeScoreSummary score={shared.target!} value={shared.targetPoints} label="Your shared target"/><label htmlFor="new-challenge-link">Revocable public link</label><input id="new-challenge-link" readOnly value={shared.publicUrl} onFocus={event => event.currentTarget.select()}/><div className="progress-actions"><button className="button gold" onClick={() => { void shareLink(shared); }}><Share2 size={17}/>Share invitation</button><button className="button outline" onClick={() => { void copy(shared.publicUrl); }}><Copy size={17}/>Copy link</button><a className="button outline" href={shared.publicUrl}>View landing page</a><button className="text-link" disabled={!!busy} onClick={() => { void mutate('revokeChallenge', { challengeId: shared.id }, 'Public invitation revoked.'); }}>Revoke this link</button></div></section>}
@@ -298,3 +293,4 @@ function RematchForm({ friends, busy, mutate }: { friends: ProfileSnapshot['frie
   const selectedHand = hands.some(hand => hand.handId === handId) ? handId : hands[0]?.handId ?? '';
   return <form className="progress-form" onSubmit={event => { event.preventDefault(); void mutate('createRematch', { friendId: selected, handId: selectedHand }, 'Rematch invitation created. Your friend can accept using its link.'); }}><label htmlFor="rematch-friend">Choose an accepted friend</label><select id="rematch-friend" value={selected} onChange={event => setFriend(event.target.value)}>{friends.map(item => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select>{error && <p className="progress-error" role="alert">{error}</p>}{loading ? <p role="status">Finding your shared completed hands…</p> : hands.length ? <><label htmlFor="rematch-hand">A completed hand you played together</label><select id="rematch-hand" value={selectedHand} onChange={event => setHandId(event.target.value)}>{hands.map(hand => <option key={hand.handId} value={hand.handId}>{gameName(hand.game)} · Rule {hand.ruleNumber} · {date(hand.startedAt)}</option>)}</select><button className="button gold" disabled={busy || !selectedHand}><RotateCcw size={17}/>Create rematch invitation</button></> : <p className="progress-empty">No shared qualifying completed hands with this friend yet. Finish a new recorded game together to invite a rematch.</p>}<p className="progress-note">No message is sent automatically. Your game begins only after explicit acceptance.</p></form>;
 }
+
