@@ -141,5 +141,6 @@
   .parkes-app > .home-main > .start-panel > h2 { font-size: 29px; margin-bottom: 9px; }
   .parkes-app > .home-main > .start-panel > .account-controls { margin-bottom: 9px; padding-bottom: 8px; }
   .parkes-app > .home-main > .start-panel > .home-play-tabs { margin-bottom: 9px; }
+  .parkes-app > .home-main .home-play-tabs > button { min-height: 44px; padding-block: 4px; }
   .parkes-app > .home-main .account-intro { display: none; }
 }

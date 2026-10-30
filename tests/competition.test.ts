@@ -30,7 +30,13 @@ const frozen = createFrozenEngine(createSeededRuntime('synthetic-policy-source-0
 function publicGameplay(room: ChallengeRoom): ReturnType<typeof publicChallengeRoom> {
   // Public comparisons use the actual JSON wire shape, including optional fields.
   const view = JSON.parse(JSON.stringify(publicChallengeRoom(room, room.challenge.humanPlayerId))) as ReturnType<typeof publicChallengeRoom>;
-  if (view.completedRecord) view.completedRecord.handId = 'synthetic-per-attempt-record';
+  // Completion IDs identify each attempt's evidence, not the deterministic deal.
+  for (const completion of [view.completedRecord, view.completedPlay]) {
+    if (!completion) continue;
+    assert.equal(completion.handId, room.records!.current[room.challenge.humanPlayerId].handId);
+    assert.equal(completion.handId, room.records!.handId);
+    completion.handId = 'synthetic-per-attempt-record';
+  }
   return view;
 }
 function nextPolicyAction(room: ChallengeRoom): GameAction {
@@ -56,6 +62,13 @@ test('frozen challenge deck, card IDs, AI decisions and reconnect trajectory rep
     assert.equal(first.challenge.randomCursor, second.challenge.randomCursor);
   }
   assert.ok(actions >= 10, 'Exercise a meaningful multi-turn trajectory.');
+  for (const room of [first, second]) {
+    assert.equal(room.status, 'finished', 'Exercise the completion projections.');
+    const view = publicGameplay(room);
+    assert.ok(view.completedRecord, 'The finished attempt exposes its record.');
+    assert.ok(view.completedPlay, 'The finished attempt exposes its play completion.');
+  }
+  assert.notEqual(first.records!.handId, second.records!.handId, 'Independent attempts retain distinct hand IDs.');
   assert.equal(initial.challenge.randomCursor, create().challenge.randomCursor, 'Saved input was not mutated.');
 });
 
